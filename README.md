@@ -90,7 +90,7 @@ fastboot flash userdata ubuntu_root_sparse.img
 fastboot reboot
 ```
 
-**Important:** After the reboot, do not interrupt the device. The initial boot sequence involves partition expansion and service initialization. It may remain on the boot splash for several minutes. Just be patient\!
+**Important:** After running "fastboot reboot", do not interrupt the device, fastboot is finishing the write to NAND, INTERRUPTING THIS WILL BRICK YOUR INSTALL!\!
 
 -----
 
