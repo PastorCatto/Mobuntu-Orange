@@ -77,26 +77,26 @@ Run the scripts in this specific sequence to build your OS:
   |
   +-- 7_kernel_menuconfig.sh (Optional kernel hacking)
 
----
-
 [ GENERATED OUTPUT IMAGES ]
+========================================================================
 
-  +-- pmos_boot.img ------------------------> Target: Internal /boot
-  |                                           (Mandatory ABL Trigger)
-  |
-  +-- [ Raw Ext4 Images - For MicroSD Card ]
-  |     |
-  |     +-- ubuntu_beryllium_boot.img ------> Target: SD Partition 1
-  |     |
-  |     +-- ubuntu_beryllium_root.img ------> Target: SD Partition 2
-  |
-  +-- [ Sparse Images - For Internal Hijack ]
-        |
-        +-- ubuntu_beryllium_boot_sparse.img -> Target: Internal /system
-        |
-        +-- ubuntu_beryllium_root_sparse.img -> Target: Internal /userdata
+pmos_boot.img ---------------------------> Target: Internal /boot
+                                           (Mandatory ABL Trigger)
 
----
+[ Raw Ext4 Images ] -> For MicroSD Card Deployment
+|
+|--- ubuntu_beryllium_boot.img ----------> Target: SD Partition 1
+|
+'--- ubuntu_beryllium_root.img ----------> Target: SD Partition 2
+
+
+[ Sparse Images ] -> For Internal Hijack (Fastboot)
+|
+|--- ubuntu_beryllium_boot_sparse.img ---> Target: Internal /system
+|
+'--- ubuntu_beryllium_root_sparse.img ---> Target: Internal /userdata
+
+========================================================================
 
 [ FLASHING INSTRUCTIONS ]
 
