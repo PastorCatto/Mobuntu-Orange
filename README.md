@@ -1,10 +1,10 @@
 # Ubuntu Desktop for POCO F1 (Beryllium)
 
 
-#### AI GENERATED TO SAVE TIME, HUMAN-WRITTEN README ALSO ATTACHED ####
-#### My REPO i used to store all my progress is located here: https://github.com/PastorCatto/Ubuntu-PocoF1-Archive  ####
-#### My organization is a mess (IM SORRY!) so hence the fresh repo once i got system booting! ####
-#### Check Engineering-Report.md for a more advanced breakdown of how we got here and what actually happens ####
+#### AI GENERATED TO SAVE TIME, HUMAN-WRITTEN README ALSO ATTACHED####
+#### My REPO i used to store all my progress is located here:https://github.com/PastorCatto/Ubuntu-PocoF1-Archive  ####
+#### My organization is a mess (IM SORRY!) so hence the fresh repo once i got system booting!####
+#### Check Engineering-Report.md for a more advanced breakdown of how we got here and what actually happens####
 
 
 Welcome! This project provides a fully automated, paste-and-go script suite to build and install a custom Ubuntu Desktop OS (Lomiri, XFCE, or GNOME) directly onto your POCO F1.
@@ -51,46 +51,6 @@ The AIO script will auto-run the second you paste it. Follow the prompts until y
 I tried to make this as debuggable as possible, so there are extra scripts. Run them in the following order (skipping the optional bits if you don't need them):
 
 
-[ The Build Scripts: Execution Order ]
-
-  +-- deploy_workspace.sh
-  |   (Run Once) The master generator. Run this first to spawn the script suite below.
-  |
-  +-- 1_preflight.sh
-  |   (Step 1) Installs host PC dependencies and generates your build.env configuration.
-  |
-  +-- 2_pmos_setup.sh
-  |   (Step 2) Initializes pmbootstrap, builds the mainline kernel, and clones the required UUIDs.
-  |
-  +-- 3_firmware_fetcher.sh
-  |   (Step 3 - Optional) SSHs into a running Mobian phone to harvest proprietary audio/modem firmware.
-  |
-  +-- 4_the_transplant.sh
-  |   (Step 4) Builds the base Ubuntu arm64 rootfs, injects the kernel/firmware, and installs the UI.
-  |
-  +-- 8_lomiri_hotfix.sh
-  |   (Conditional) Run immediately AFTER Script 4 ONLY if you chose Lomiri and need to patch DBus/LightDM.
-  |
-  +-- 5_enter_chroot.sh
-  |   (Optional Hacking Tool) Mounts and enters the unsealed Ubuntu folder as root for manual tweaking.
-  |
-  +-- 6_seal_rootfs.sh
-  |   (Final Step) Packs the folder into the dual raw and sparse .img files for deployment.
-  |
-  +-- 7_kernel_menuconfig.sh
-      (Optional Hacking Tool) Opens the kernel menuconfig or deviceinfo file to modify boot parameters.
-	  
-	  Flash this according to the method you chose to install
-	  (Internal or MicroSD)
-	  
-	  (Fastboot) Flash using:
-	  fastboot flash boot pmos_boot.img
-	  fastboot flash system ubuntu_beryllium_boot_sparse.img
-	  fastboot flash userdata ubuntu_beryllium_root_sparse.img
-	  fastboot reboot (DO NOT REBOOT USING POWER BUTTON)
-	  
-	  Reboot and Enjoy!
-	  
 	  [ Generated Output Images ]
   |
   +-- pmos_boot.img ------------------------> Target: Internal /boot 
@@ -107,5 +67,14 @@ I tried to make this as debuggable as possible, so there are extra scripts. Run 
         +-- ubuntu_beryllium_boot_sparse.img -> Target: Internal system (fastboot flash system XXX_sparse.img)
         |
         +-- ubuntu_beryllium_root_sparse.img -> Target: Internal userdata (fastboot flash userdata XXX_sparse.img)# Ubuntu-Desktop-For-POCO-F1-beryllium
+Welcome! Let's get a few things out of the way first.
 
 	
+
+	you can flash them with:
+	fastboot flash boot pmos_boot.img
+	fastboot flash system ubuntu_beryllium_boot_sparse.img
+	fastboot flash userdata ubuntu_beryllium_root_sparse.img
+	fastboot reboot <--(DO NOT PRESS THE POWER BUTTON, JUST WAIT! IT WILL TAKE A WHILE!)
+	
+	and Boom! you got a Ubuntu installed! i'm planning on building prebuilt images, but after i get the basics working!
