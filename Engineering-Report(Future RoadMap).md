@@ -1,3 +1,5 @@
+
+
 # Engineering Report: Beryllium Mainline Architecture
 **Project:** Ubuntu Desktop for POCO F1 (Beryllium)
 **Document Version:** 4.3 (Alpha - Hardware Stabilization & Universal Roadmap)
