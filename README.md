@@ -93,7 +93,7 @@ If your POCO F1 is hanging on the postmarketOS splash screen and you need to rea
 #### Method 1: On-the-Fly Fastboot Injection (Live Boot Only)
 For a quick, temporary test without recompiling the image, you can instruct Fastboot to inject the flags directly into RAM. *Note: Depending on your specific Xiaomi firmware version, the Android Bootloader may block real-time string injections. If the screen remains blank, use Method 2.*
 ```bash
-fastboot --cmdline "PMOS_NOSPLASH console=tty0" boot /tmp/postmarketOS-export/boot.img
+fastboot --cmdline "PMOS_NOSPLASH console=tty0" boot pmos_boot.img
 ```
 
 #### Method 2: Permanent Header Modification (`deviceinfo` trick)
