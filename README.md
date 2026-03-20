@@ -48,7 +48,7 @@ When generating your workspace, you can choose from the following environments. 
 1. Prepare your Ubuntu 24.04 host environment.
 2. **Harvest the Firmware:** Mainline Linux requires proprietary Qualcomm blobs (Audio UCMs, Modem rules) to talk to the SDM845 hardware. 
    * Flash [Mobian Weekly](https://images.mobian.org/qcom/weekly/) to your POCO F1.
-   * Boot the phone, connect to Wi-Fi, and enable the SSH server: `sudo apt update && sudo apt install openssh-server`
+   * Boot the phone, connect to Wi-Fi, and enable the SSH server: `sudo apt update && sudo apt install openssh-server && sudo systemctl enable ssh`
    * *Note: The default Mobian password is `1234`.*
 3. Copy the master `deploy_workspace.sh` script from this repo into an empty folder on your PC and run it.
 
