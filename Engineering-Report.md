@@ -2,83 +2,103 @@
 
 # Engineering Report: Beryllium Mainline Architecture
 **Project:** Ubuntu Desktop for POCO F1 (Beryllium)
-**Document Version:** 1.0 (Post-Lomiri Pivot)
+**Document Version:** 3.0 (Post-Lomiri Pivot & Bootloader Retrospective)
 
-This document serves as a technical deep-dive into the automated build suite. It explains the mechanics of bypassing the Android bootloader, resolving hardware race conditions, and compiling a native ARM64 Linux environment using cross-architecture chroots.
-
----
-
-## 1. The Bootchain & The "Partition Hijack"
-
-Booting a mainline Linux kernel on an Android device requires tricking the Android Bootloader (ABL). The Poco F1's ABL expects a standard Android boot image structure (Header + Kernel + Ramdisk + DTB) and expects to boot from internal eMMC/UFS partitions formatted in a highly specific way.
-
-### 1.1 The ABL Trigger (`pmos_boot.img`)
-We utilize `pmbootstrap` as our core engine to compile the mainline Snapdragon 845 kernel. Once compiled, `pmbootstrap export` wraps the `vmlinuz` kernel and the postmarketOS `initramfs` into an Android-compatible `.img` file. We flash this tiny image to the POCO F1's internal `/boot` partition. This acts as the "Hardware Trigger"—it wakes up the CPU, initializes the RAM, and hands execution over to the mainline kernel.
-
-### 1.2 The Partition Hijack & UUID Spoofing
-Instead of risking the device by re-partitioning the UFS storage layout, we hijack existing Android partitions:
-* **Android `/system` (approx. 2-3GB):** Becomes our Linux `/boot` (BootFS).
-* **Android `/userdata` (approx. 64GB+):** Becomes our Linux `/` (RootFS).
-
-**The Challenge:** The postmarketOS `initramfs` is hardcoded during compilation to look for specific partition UUIDs to mount the RootFS. 
-**The Solution:** Script 2 scrapes the expected `PMOS_ROOT_UUID` and `PMOS_BOOT_UUID` directly from the generated pmOS `fstab`. During Script 6 (Image Sealing), we use `mkfs.ext4 -U` to forcefully clone these exact UUIDs onto our custom Ubuntu ext4 images. When the kernel boots, it finds the matching UUIDs and mounts the Ubuntu OS, completely unaware that it isn't running postmarketOS.
+This document serves as a technical deep dive into the automated build suite. It details our architectural evolution, our abandoned attempts at standardizing the bootloader via UEFI and U-Boot, and explains the intricate mechanics of our final "Partition Hijack" method.
 
 ---
 
-## 2. Hardware Initialization Quirks
+## 1. The Bootloader Wars: The Search for a PC-like Boot
 
-Getting the kernel to boot is only half the battle; getting it to talk to the hardware requires specific workarounds.
+The ultimate holy grail of running mainline Linux on a smartphone is achieving a standard "PC-like" boot environment—where you can plug in a USB drive, access a GRUB menu, and install an OS normally. However, the Snapdragon 845 (SDM845) has a locked-down firmware chain ending in the Android Bootloader (ABL). We explored three distinct methods to break out of this chain.
 
-### 2.1 The `rootdelay=5` Race Condition
-Mainline kernels on Beryllium suffer from a UFS initialization race condition. The kernel boots so fast that it attempts to mount the RootFS before the UFS storage controller has fully powered on, resulting in a kernel panic ("Waiting for root device").
-* **The Fix:** Script 2 automatically injects `rootdelay=5` into the `deviceinfo` kernel command line. This forces a hard 5-second pause, ensuring the UFS controller is awake before the mount command is issued.
+### Attempt 1: The UEFI Port (`edk2-sdm845`) & Fedora Pocketblue
+The Renegade Project has made massive strides in porting the EDK2 UEFI environment to the SDM845 platform. The theory was to flash this custom UEFI firmware into the Android `boot` partition, effectively transforming the POCO F1 into a standard ARM64 PC capable of booting generic `.iso` files via systemd-boot or GRUB.
 
-### 2.2 The DSI Display Bug (Kernels >6.14)
-During development, we discovered that bleeding-edge `edge` kernels suffer from a DRM/KMS synchronization issue with the Beryllium's Display Serial Interface (DSI). This results in a completely blank screen upon boot, even though the OS is running in the background.
-* **The Fix:** We enforce the use of the `v25.06` channel during `pmbootstrap init`. This locks the build to a stable kernel branch where the `msm` DRM driver correctly initializes the Tianma and EBBG display panels.
+This approach gained significant traction with the **Fedora Pocketblue** project—a brilliant community initiative aimed at bringing Fedora Atomic (immutable) OS architectures to mobile devices like the POCO F1. Pocketblue utilizes OCI containers, OSTree, and Bootc to deliver a desktop-class immutable Linux experience on the SDM845. Attempting to marry Pocketblue's advanced image-based deployment with a true UEFI bootchain was a tantalizing prospect for our project.
 
-### 2.3 The Mobian Firmware Bridge
-Audio routing (ALSA UCM profiles), Bluetooth, and Cellular Modems on Snapdragon devices require proprietary firmware blobs that are intricately tied to the vendor partition. Rather than guessing which blobs work, Script 3 opens an SSH bridge to a device running **Mobian**. Mobian has already stabilized these blobs for the SDM845, allowing us to surgically harvest `/usr/share/alsa/ucm2` and `/lib/firmware/postmarketos/` to ensure day-zero hardware compatibility.
+* **Why it failed for our automation:** 1. **The ESP Requirement:** Standard PC Linux deployments (including Fedora Atomic) expect an EFI System Partition (ESP) formatted as FAT32 at the very start of the disk. Android's native GUID Partition Table (GPT) does not accommodate this. Forcing end-users to manually re-partition their UFS storage via `parted` carries a catastrophic risk of hard-bricking the device.
+  2. **Firmware Fragmentation:** The EDK2 port is exquisitely sensitive to the underlying Xiaomi vendor firmware baseline. If a user had slightly mismatched vendor firmware, the UEFI environment would instantly black-screen. This made our goal of a "paste-and-go" automated script suite impossible.
 
----
+### Attempt 2: Chainloading U-Boot (`u-boot-beryllium`)
+Our second attempt was compiling a native `u-boot` binary specifically for the Beryllium board. The strategy was to wrap the U-Boot executable inside a standard Android boot image, have the Android Bootloader (ABL) execute it, and then let U-Boot initialize the screen and search the MicroSD card or UFS for a standard `extlinux.conf` file.
 
-## 3. Chroot Hardening & Architecture Crossing
+* **Why it failed for our automation:** 1. **DSI Panel Initialization Nightmare:** U-Boot struggled to reliably initialize the complex Display Serial Interface (DSI) required for the Tianma and EBBG panels used in the POCO F1. The panels require strict timing sequences and power-domain handshakes. We were frequently left with a dead framebuffer, meaning the user could not see the boot process.
+  2. **Debugging Constraints:** Without a functional framebuffer, debugging a kernel panic required a specialized USB debug cable with exposed UART serial pins. Since the average user does not possess UART hardware, debugging a failed U-Boot deployment was impossible for the general public.
 
-To build an ARM64 (aarch64) OS on an x86_64 host PC, we utilize `debootstrap` and `qemu-user-static`. However, running complex package managers inside a virtualized jail presents severe challenges.
+### The Victor: The Native ABL Hijack (`pmos_boot.img`)
+We abandoned the dream of a pre-boot menu in favor of bulletproof reliability. We utilize `pmbootstrap` to cross-compile the mainline Linux kernel (`Image.gz`), the device tree blob (`dtb`), and a minimal `initramfs`. 
 
-### 3.1 The `/proc` and `/run` Bind Mounts
-Many system-level packages evaluate the host kernel to determine security features (AppArmor) or communicate with background services (DBus). If the chroot jail lacks access to these virtual filesystems, installations will fail.
-* **The Fix:** Script 4 and Script 5 implement "Hardened Mounts." We utilize a loop to `mount --bind` the host's `/dev`, `/dev/pts`, `/sys`, `/proc`, and crucially `/run` directly into the `Ubuntu-Beryllium` workspace. This tricks the package manager into seeing a fully operational kernel, allowing complex hooks to compile without panicking.
+* **The Mechanism:** These components are packed using standard Android `mkbootimg` parameters. The ABL reads this image, assumes it is booting standard Android, loads the kernel into specific RAM addresses, and blindly passes execution. It is safe, requires zero UFS re-partitioning, and guarantees display initialization because we let the mainline Linux `msm` DRM driver handle the screen natively.
 
 ---
 
-## 4. UI Evolution & The War on Bloat
+## 2. The Partition Hijack & Storage Routing
 
-The build suite underwent a massive architectural pivot regarding how the user interface is deployed. 
+Because we are utilizing the ABL, the boot sequence is hardcoded to look at the internal UFS storage. We developed a "Warm Swap" hijack method.
 
-### 4.1 The Lomiri Deprecation
-Initially, the project attempted to deploy **Lomiri (Ubuntu Touch)**. This was ultimately deprecated due to extreme technical debt:
-1. **The `click` Package Manager:** Lomiri relies on `click` to handle sandboxed apps. `click` aggressively probes the kernel for AppArmor profiles.
-2. **Architecture Spoofing Failure:** Because we compile on an x86 host, `dpkg-architecture` reported the wrong CPU type to Lomiri's Python installation scripts, causing violent subprocess crashes. 
-3. **The Pivot:** Rather than writing endlessly complex hotfixes to spoof architectures and mock `/proc` states, we pivoted to natively supported Linux sessions (Phosh, GNOME, KDE, XFCE).
+### 2.1 Dual-Partition Remapping
+Android defines `/system` (usually 2-3GB) and `/userdata` (the rest of the 64GB+ chip). We repurpose these entirely:
+* **Linux `/boot` (BootFS) -> Android `/system`**
+* **Linux `/` (RootFS) -> Android `/userdata`**
 
-### 4.2 Minimal Sessions & `--no-install-recommends`
-Standard Ubuntu metapackages (e.g., `ubuntu-desktop`) are designed for x86 laptops. Installing them on a phone pulls in gigabytes of bloat—printer spoolers (CUPS), LibreOffice, Thunderbird, and telemetry services that choke the Snapdragon 845.
-* **The Anti-Bloat Strategy:** We completely abandoned metapackages. The script now strictly targets "session" packages (e.g., `gnome-session`, `plasma-desktop`, `unity-session`).
-* **The Enforcer:** Script 4 runs `apt-get install` with the `--no-install-recommends` flag. This forces `apt` to ignore all suggested bloatware, installing only the raw binaries required to render the window manager and virtual keyboard.
+### 2.2 Advanced UUID Spoofing
+The postmarketOS `initramfs` is tightly generated. During compilation, it hardcodes the exact UUIDs it expects to find for the boot and root partitions inside its local `fstab`. If it doesn't find them, the kernel panics and drops to an emergency shell.
 
-### 4.3 Dynamic Display Manager Routing
-Because we offer multiple OS flavors, we cannot hardcode a single login screen. GNOME requires `gdm3`, KDE requires `sddm`, and XFCE/Unity require `lightdm`. 
-* **The Fix:** Script 1 maps the chosen UI to its required Display Manager variable (`DM_PKG`). Script 4 uses `debconf-set-selections` to pre-seed the `apt` database, allowing the Display Manager to install silently. It then hardcodes `/etc/X11/default-display-manager` to ensure the OS boots directly to the correct lock screen without user intervention.
+* **The Engineering Fix:** Script 2 scrapes the `PMOS_ROOT_UUID` and `PMOS_BOOT_UUID` directly from the generated pmOS chroot. Later, during image generation, Script 6 uses `mkfs.ext4 -U <spoofed_uuid>` to forcefully brand our custom Ubuntu images with those exact hexadecimal strings. The kernel reads the UFS block device, sees the expected UUIDs, and mounts the Ubuntu OS seamlessly.
+
+### 2.3 Resolving the `rootdelay=5` Race Condition
+A critical race condition exists on the SDM845 platform: the mainline kernel boots so rapidly that it attempts to mount the RootFS before the internal UFS storage controller has finished its hardware initialization sequence. 
+
+* **The Engineering Fix:** Script 2 dynamically alters the `deviceinfo_kernel_cmdline` variable, injecting `rootdelay=5`. This forces the kernel to halt execution for 5 seconds, allowing the UFS hardware to wake up and present its block devices (`/dev/sda`, `/dev/sde`, etc.) before the mount command fires.
 
 ---
 
-## 5. Image Serialization (Sparse vs. Raw)
+## 3. Hardware Initialization & Firmware Splicing
 
-The final step is converting the raw Linux folder into something the POCO F1 can actually swallow.
+A mainline kernel without proprietary firmware blobs is deaf, blind, and disconnected.
 
-### 5.1 Android Fastboot Limitations
-Android's `fastboot` protocol cannot flash raw disk images larger than a few gigabytes without hitting memory buffers and timing out. 
-* **The Fix:** Script 6 uses the `img2simg` tool to convert our massive 8GB+ `ext4` filesystems into Android **Sparse Images**. This process compresses the empty data blocks within the filesystem. When `fastboot flash userdata` is executed, the bootloader reads the sparse header and perfectly reconstructs the 8GB filesystem on the phone's internal memory. 
+### 3.1 The DSI Display Bug (Kernels >6.14)
+We encountered a critical regression in bleeding-edge (`edge`) kernels. A DRM/KMS (Kernel Mode Setting) synchronization issue with the Beryllium's DSI timing results in the display failing to wake up, even though the OS is fully functional via SSH.
 
-For users wishing to dual-boot or test safely without wiping their phone, the script intentionally leaves the original **Raw Ext4** images intact so they can be written directly to a MicroSD card via the `dd` command.
+* **The Engineering Fix:** The build suite strictly enforces the `v25.06` pmbootstrap channel. This locks our kernel to a stabilized branch where the `msm` (Freedreno/Turnip) driver correctly initializes the framebuffer before handing control to the display manager.
+
+### 3.2 The SSH Firmware Bridge
+Audio routing on modern Qualcomm chips requires complex ALSA UCM (Use Case Manager) profiles. Furthermore, the Wi-Fi, Bluetooth, and Cellular Modems require closed-source binaries matched to the specific vendor partition of the device.
+
+* **The Engineering Fix:** Rather than maintaining an illegal repository of proprietary blobs, Script 3 establishes a secure SSH bridge to a live device running **Mobian**. It surgically extracts `/usr/share/alsa/ucm2` and `/lib/firmware/postmarketos/` directly from a functional, community-stabilized OS. This ensures our Ubuntu build inherits 'day-zero' hardware support legally.
+
+---
+
+## 4. Chroot Escapes & Architecture Crossing
+
+Building an `aarch64` (ARM64) filesystem on an `x86_64` host utilizing Windows Subsystem for Linux (WSL) requires a robust translation layer (`qemu-user-static`).
+
+### 4.1 The `/proc` and `/run` Bind Mounting Requirement
+During initial development, package managers utilized the virtual `/proc` filesystem to verify kernel architecture and AppArmor security profiles. An empty chroot jail triggered a fatal panic.
+
+* **The Engineering Fix:** Scripts 4 and 5 implement a hardened bind-mount loop. We project the host machine's `/dev`, `/dev/pts`, `/sys`, `/proc`, and crucially `/run` directly into the `Ubuntu-Beryllium` workspace. This tricks the package manager into seeing a fully operational, live kernel, allowing complex `systemd` hooks and architecture checks to complete successfully.
+
+---
+
+## 5. UI Evolution: The War on Bloat
+
+The transition from a command-line interface to a graphical desktop required a massive shift in how we handle Debian packages.
+
+### 5.1 The Lomiri Deprecation
+Early versions of this suite attempted to deploy **Lomiri (Ubuntu Touch)**. This failed catastrophically due to Lomiri's reliance on the `click` package manager, which utilizes Python subprocesses to verify hardware architecture. Under QEMU virtualization, the host kernel reported as x86_64, causing the ARM64 `click` installer to violently abort. 
+
+### 5.2 Session Packages & `--no-install-recommends`
+Standard Ubuntu metapackages (`ubuntu-desktop`) pull in CUPS printer spoolers, heavy email clients, and background telemetry that devastate a smartphone's resources.
+
+* **The Engineering Fix:** The suite targets bare-metal "session" packages (e.g., `gnome-session`, `plasma-desktop`, `phosh-core`). Furthermore, the master `apt-get install` command is hardcoded with the `--no-install-recommends` flag. This violently strips out all suggested bloatware, ensuring the final image contains only the absolute minimum binaries required to render the UI.
+
+---
+
+## 6. Image Serialization (Sparse vs. Raw)
+
+Android's `fastboot` protocol is notoriously unstable when flashing raw disk images exceeding 2GB. Attempting to flash an 8GB raw Ubuntu Ext4 image will result in a buffer overflow.
+
+* **The Engineering Fix:** Script 6 utilizes the `img2simg` utility to convert our raw Ext4 filesystems into Android **Sparse Images**. This process analyzes the 8GB filesystem, identifies the empty blocks, and compresses them. The resulting sparse image is mathematically chopped into smaller chunks that `fastboot` can swallow. The POCO F1's bootloader then reconstructs the full 8GB geometry natively on the internal UFS. 
+
+***
