@@ -100,7 +100,7 @@ Optional utility to modify kernel drivers via menuconfig or edit the `deviceinfo
 
 To adapt this toolkit for a different device, the following manual updates are required:
 
-1.  **Identifiers:** Perform a global search and replace for `xiaomi` and `beryllium` with your target vendor and codename.
+1.  **Identifiers:** Perform a global search and replace for `xiaomi` and `beryllium` with your target vendor and codename. (Refer To the Developer Toolkit, script provided)
 2.  **Storage Logic:** If the target device uses eMMC instead of UFS, you may reduce the `rootdelay=5` flag in Script 2.
 3.  **Firmware Source:** If a Mobian donor is unavailable, Script 3 must be modified to pull blobs from an Android `/vendor` partition or a local directory.
 4.  **Audio Mapping:** In Script 4, ensure the ALSA UCM paths match the SoC of the new target (e.g., `ucm2/conf.d/sdm845`).
