@@ -1,4 +1,10 @@
 
+
+
+# UPDATE! WE NOW HAVE A PORTING GUIDE TO PORT TO OTHER DEVICES! YOU CAN ADAPT THIS SCRIPT TO BUILD FOR WHAT YOU NEED!
+# GOOD LUCK!
+
+
 # Ubuntu Desktop for POCO F1 (Beryllium)
 
 This project provides a modular, automated build suite to deploy a clean, functional Ubuntu Linux OS directly onto the POCO F1 (Snapdragon 845). 
