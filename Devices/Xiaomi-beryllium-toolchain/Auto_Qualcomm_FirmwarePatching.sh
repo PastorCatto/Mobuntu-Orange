@@ -3,7 +3,7 @@ set -e
 
 # Ensure the user provides the path to the chroot directory
 CHROOT_DIR=$1
-INNER_SCRIPT="build_tools_inner.sh"
+INNER_SCRIPT="Qualcomm_Compiler.sh"
 
 if [ -z "$CHROOT_DIR" ]; then
     echo "Usage: sudo $0 /path/to/your/chroot"
