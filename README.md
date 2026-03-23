@@ -1,7 +1,9 @@
-# Project Beryllium: Ubuntu-pmOS Hybrid Porting Toolkit
+# UbuntuDesktop PocketEdition: Ubuntu-pmOS Hybrid Porting Toolkit
 # Document version v2.0a (the Public Port Toolkit Update)
 # Update Coming Soon (will re-do all the documentation for new and adapted scripts)
-
+# THIS IS VERY MUCH OUT OF DATE BUT THE SPEED OF THE PROJECT IS JUST TOO DAMN FAST (like sonic!)
+# WILL UPDATE ONCE WE HIT STABLE! SORRY FOR THE INCONVIENCE! 
+# Discord server where i chill like 90% of the time: https://discord.gg/RZV2HveyBg (PastorCatto's The ISLAND)
 This repository contains a modular toolkit for building a custom Ubuntu Noble (24.04) image for the Xiaomi Poco F1 (beryllium). It utilizes a "Hybrid Transplant" methodology, employing postmarketOS (pmOS) as the hardware-enablement foundation and a live Mobian installation for mandatory proprietary firmware and hardware mapping.
 
 ---
