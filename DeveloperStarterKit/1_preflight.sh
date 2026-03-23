@@ -26,10 +26,10 @@ echo "--- Mobile Shells (Touch-First) ---"
 echo "1) Phosh (Purism GNOME + Squeekboard)"
 echo "2) Plasma Mobile (KDE Mobile + Maliit)"
 echo "--- Desktop Flavors (Tablet/PC) ---"
-echo "3) GNOME Minimal (Standard Ubuntu)"
-echo "4) KDE Plasma Minimal (Kubuntu)"
-echo "5) Ubuntu Unity Minimal (The Classic)"
-echo "6) XFCE Minimal (Lightweight Xubuntu)"
+echo "3) GNOME Vanilla (ubuntu-desktop-minimal)"
+echo "4) KDE Plasma Vanilla (kde-plasma-desktop)"
+echo "5) Ubuntu Unity Vanilla (ubuntu-unity-desktop)"
+echo "6) XFCE Vanilla (xubuntu-core)"
 echo "7) Custom (Provide your own)"
 read -p "Choice [1-7, default 1]: " UI_CHOICE
 UI_CHOICE=${UI_CHOICE:-1}
@@ -41,24 +41,24 @@ case $UI_CHOICE in
        UI_NAME="plasma-mobile" 
        ;;
     3) 
-       UI_PKG="gnome-session gnome-terminal nautilus onboard"
+       UI_PKG="ubuntu-desktop-minimal onboard"
        DM_PKG="gdm3"
-       UI_NAME="gnome-minimal" 
+       UI_NAME="gnome-vanilla" 
        ;;
     4) 
-       UI_PKG="plasma-desktop konsole dolphin onboard"
+       UI_PKG="kde-plasma-desktop onboard"
        DM_PKG="sddm"
-       UI_NAME="kde-minimal" 
+       UI_NAME="kde-vanilla" 
        ;;
     5) 
-       UI_PKG="unity-session gnome-terminal nautilus onboard"
+       UI_PKG="ubuntu-unity-desktop onboard"
        DM_PKG="lightdm"
-       UI_NAME="unity-minimal" 
+       UI_NAME="unity-vanilla" 
        ;;
     6) 
-       UI_PKG="xfce4 xfce4-terminal thunar onboard"
+       UI_PKG="xubuntu-core onboard"
        DM_PKG="lightdm"
-       UI_NAME="xfce-minimal" 
+       UI_NAME="xfce-vanilla" 
        ;;
     7) 
        read -p "Enter full core package name(s): " CUSTOM_PKG
@@ -75,8 +75,8 @@ case $UI_CHOICE in
 esac
 
 echo ""
-read -p "Enter desired RootFS image size in GB (Minimum 8) [default: 8]: " IMG_INPUT
-IMG_INPUT=${IMG_INPUT:-8}
+read -p "Enter desired RootFS image size in GB (Minimum 8) [default: 12]: " IMG_INPUT
+IMG_INPUT=${IMG_INPUT:-12}
 if [ "$IMG_INPUT" -lt 8 ]; then
     echo ">>> Forcing minimum size of 8GB."
     IMAGE_SIZE=8

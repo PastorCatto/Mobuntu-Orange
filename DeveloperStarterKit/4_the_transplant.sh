@@ -78,8 +78,13 @@ set +e
 # Pre-seed the debconf database so the display manager installs silently
 echo "$DM_PKG shared/default-x-display-manager select $DM_PKG" | debconf-set-selections
 
-# Install the UI and Display Manager with --no-install-recommends to kill bloat
-apt-get install -y --no-install-recommends $UI_PKG $DM_PKG modemmanager network-manager systemd-resolved
+# Install the full UI and Display Manager natively to ensure polkit/wayland configures correctly
+apt-get install -y $UI_PKG $DM_PKG modemmanager network-manager systemd-resolved
+
+# Surgically rip LibreOffice out of the OS to save space
+echo ">>> Purging LibreOffice bloatware..."
+apt-get purge -y libreoffice* || true
+apt-get autoremove -y
 
 # Hardcode the default display manager to ensure no black screens on boot
 echo "/usr/sbin/$DM_PKG" > /etc/X11/default-display-manager
