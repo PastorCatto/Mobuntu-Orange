@@ -53,13 +53,33 @@ echo "--- 4. Fetching missing GPU SQE Microcode ---"
 wget https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/qcom/a630_sqe.fw -O /lib/firmware/qcom/a630_sqe.fw
 cp /lib/firmware/qcom/a630_sqe.fw /lib/firmware/qcom/a630sqe.fw
 
-echo "--- 5. WiFi Board Data ---"
-find /tmp/beryllium-fw -name "bdwlan.bin" -exec cp -v {} /lib/firmware/ath10k/WCN3990/hw1.0/board-2.bin \;
+echo "--- 1. Patching WCN3990 WiFi Firmware ---"
+# Ensure the directory exists inside the chroot
+mkdir -p /lib/firmware/ath10k/WCN3990/hw1.0/
+
+# Download the official board-2.bin
+if command -v wget >/dev/null 2>&1; then
+    wget -O /lib/firmware/ath10k/WCN3990/hw1.0/board-2.bin \
+    "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/ath10k/WCN3990/hw1.0/board-2.bin"
+else
+    echo "Error: wget not found. Please install it with 'apt install wget'."
+    exit 1
+fi
 
 echo "--- 6. ALSA Audio Setup ---"
 rm -rf /tmp/sdm845-ucm
 git clone --depth 1 https://gitlab.com/sdm845-mainline/alsa-ucm-conf.git /tmp/sdm845-ucm
 cp -rv /tmp/sdm845-ucm/ucm2/* /usr/share/alsa/ucm2/
+
+echo "--- 7. Creating RMTFS Service ---"
+cat << 'SVC' > /etc/systemd/system/rmtfs.service
+[Unit]
+Description=Qualcomm Remote Filesystem Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/rmtfs -r
+Restart=always
 
 echo "--- 7. Enabling Qualcomm Services ---"
 systemctl enable bluetooth.service
