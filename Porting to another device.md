@@ -1,3 +1,5 @@
+# OUT OF DATE! WILL UPDATE AFTER TESTING
+
 # Project Beryllium: Ubuntu-pmOS Hybrid Porting Guide
 
 This documentation outlines the technical process for adapting the **ROM Cooker** build system to new ARM64 Android devices. The system utilizes a "Hybrid Transplant" methodology, where postmarketOS (pmOS) provides the hardware-enablement layer (kernel, modules, DTB) and Ubuntu Noble provides the user-space environment.
