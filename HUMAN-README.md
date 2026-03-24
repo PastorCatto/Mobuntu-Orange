@@ -26,6 +26,7 @@ if you dont trust the scripts, then do a read-over here on github before you dow
 
 THIS REQUIRE A LOT OF SPACE (50GB on the higher end) (looking into space optimizations down the road but we are about to generate like 6 images
 
+(Update! NO LONGER NEED MOBIAN! we pull from sdm845-mainline now!)
 YOU WILL NEED MOBIAN INSTALLED FOR FIRMWARE BLOBS (Unless you download the provided firmware blobs)
 
 if that works for you, then lets begin!
