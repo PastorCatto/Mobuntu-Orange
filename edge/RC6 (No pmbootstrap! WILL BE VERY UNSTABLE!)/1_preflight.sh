@@ -10,8 +10,19 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     debootstrap qemu-user-static qemu-system-aarch64 sudo e2fsprogs curl wget \
     xz-utils gzip zip ca-certificates file fdisk git python3 \
     python3-pip python3-venv sshpass tar kpartx dosfstools binfmt-support \
-    mkbootimg uuid-runtime
+    uuid-runtime
 	
+echo ">>> Installing standalone mkbootimg (replacing broken Ubuntu package)..."
+sudo apt-get remove -y mkbootimg 2>/dev/null || true
+sudo rm -rf /tmp/mkbootimg-tool
+git clone --depth=1 https://github.com/osm0sis/mkbootimg /tmp/mkbootimg-tool
+sed -i 's/-Werror//g' /tmp/mkbootimg-tool/libmincrypt/Makefile
+make -C /tmp/mkbootimg-tool CFLAGS="-ffunction-sections -O3"
+sudo cp /tmp/mkbootimg-tool/mkbootimg /usr/local/bin/mkbootimg
+sudo chmod +x /usr/local/bin/mkbootimg
+rm -rf /tmp/mkbootimg-tool
+echo ">>> mkbootimg installed: $(mkbootimg --help 2>&1 | head -1)"
+
 echo ">>> Activating QEMU binfmt handlers for arm64..."
 sudo systemctl restart systemd-binfmt
 
