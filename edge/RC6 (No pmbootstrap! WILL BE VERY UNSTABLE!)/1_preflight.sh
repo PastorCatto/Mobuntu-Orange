@@ -5,12 +5,39 @@ echo "   [1/7] Pre-Flight & Workspace Setup"
 echo "======================================================="
 
 echo ">>> Checking and installing host dependencies..."
-sudo apt-get update
+sudo apt update
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     debootstrap qemu-user-static qemu-system-aarch64 sudo e2fsprogs curl wget \
     xz-utils gzip zip ca-certificates file fdisk git python3 \
     python3-pip python3-venv sshpass tar kpartx dosfstools binfmt-support \
     mkbootimg uuid-runtime
+	
+echo ">>> Activating QEMU binfmt handlers for arm64..."
+sudo systemctl restart systemd-binfmt
+
+# Give it a moment to register
+sleep 1
+
+# Verify - the file must exist AND not be empty
+if [ ! -f /proc/sys/fs/binfmt_misc/qemu-aarch64 ] || ! grep -q "enabled" /proc/sys/fs/binfmt_misc/qemu-aarch64 2>/dev/null; then
+    echo ">>> systemd-binfmt failed, falling back to manual registration..."
+    sudo update-binfmts --install qemu-aarch64 /usr/bin/qemu-aarch64-static \
+        --magic '\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xb7\x00' \
+        --mask  '\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff' \
+        --offset 0 --credentials yes --fix-binary yes
+fi
+
+# Hard stop if still not active
+if ! grep -q "enabled" /proc/sys/fs/binfmt_misc/qemu-aarch64 2>/dev/null; then
+    echo ">>> ERROR: binfmt handler still not active. Cannot continue."
+    exit 1
+fi
+echo ">>> binfmt handler confirmed active."
+
+if [ ! -f /usr/bin/qemu-aarch64-static ]; then
+    echo ">>> ERROR: /usr/bin/qemu-aarch64-static not found. Re-installing..."
+    sudo apt-get install --reinstall qemu-user-static
+fi
 
 echo "======================================================="
 echo "   Configuration Prompts"

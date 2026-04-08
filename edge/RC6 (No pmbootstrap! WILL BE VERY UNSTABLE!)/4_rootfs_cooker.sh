@@ -8,7 +8,20 @@ if [ ! -d "Ubuntu-Beryllium" ]; then
     echo ">>> [Debootstrap] Building Ubuntu $UBUNTU_RELEASE (arm64)..."
     sudo debootstrap --arch=arm64 --foreign "$UBUNTU_RELEASE" Ubuntu-Beryllium http://ports.ubuntu.com/
     sudo cp /usr/bin/qemu-aarch64-static Ubuntu-Beryllium/usr/bin/
-    sudo chroot Ubuntu-Beryllium /debootstrap/debootstrap --second-stage
+
+    echo ">>> Running second stage..."
+    sudo chroot Ubuntu-Beryllium /usr/bin/qemu-aarch64-static /bin/bash /debootstrap/debootstrap --second-stage
+    if [ $? -ne 0 ]; then
+        echo ">>> ERROR: Debootstrap second stage failed. Removing broken rootfs."
+        sudo rm -rf Ubuntu-Beryllium
+        exit 1
+    fi
+    echo ">>> Debootstrap complete. Verifying apt-get..."
+    if [ ! -f Ubuntu-Beryllium/usr/bin/apt-get ]; then
+        echo ">>> ERROR: apt-get not present after second stage. Rootfs is broken."
+        sudo rm -rf Ubuntu-Beryllium
+        exit 1
+    fi
 fi
 
 echo ">>> Staging kernel payload..."
@@ -27,6 +40,7 @@ CHROOT_SCRIPT=$(mktemp /tmp/chroot_setup_XXXX.sh)
 cat > "$CHROOT_SCRIPT" << CHROOT_EOF
 #!/bin/bash
 set -e
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 echo "nameserver 8.8.8.8" > /etc/resolv.conf
 
 # 1. Configure APT (printf avoids nested heredoc stdin conflict)
