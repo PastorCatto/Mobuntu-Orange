@@ -35,7 +35,6 @@ for d in dev dev/pts proc sys run; do
 done
 
 echo ">>> Writing chroot build script..."
-# Variables expand here in the OUTER shell, safe from any stdin conflict
 CHROOT_SCRIPT=$(mktemp /tmp/chroot_setup_XXXX.sh)
 cat > "$CHROOT_SCRIPT" << CHROOT_EOF
 #!/bin/bash
@@ -43,7 +42,7 @@ set -e
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 echo "nameserver 8.8.8.8" > /etc/resolv.conf
 
-# 1. Configure APT (printf avoids nested heredoc stdin conflict)
+# 1. Configure APT
 printf '%s\n' \
     "deb http://ports.ubuntu.com/ubuntu-ports/ ${UBUNTU_RELEASE} main restricted universe multiverse" \
     "deb http://ports.ubuntu.com/ubuntu-ports/ ${UBUNTU_RELEASE}-updates main restricted universe multiverse" \
@@ -68,39 +67,61 @@ apt-get install -y ${UI_PKG} ${DM_PKG} ${EXTRA_PKG}
 
 # 6. Qualcomm Firmware Bundle (WiFi + GPU + DSP/Modem)
 echo ">>> Detecting installed kernel version..."
-KVER=$(ls /boot/vmlinuz-* 2>/dev/null | sed 's|/boot/vmlinuz-||' | sort -V | tail -n 1)
-echo ">>> Kernel detected: $KVER"
+KVER=""
+for f in /boot/vmlinuz-*; do
+    [ -f "\$f" ] && KVER="\$(echo \$f | sed 's|/boot/vmlinuz-||')"
+done
+if [ -z "\$KVER" ]; then
+    KVER=\$(uname -r)
+fi
+echo ">>> Kernel detected: \$KVER"
 
 GITLAB_FW="https://gitlab.com/kernel-firmware/linux-firmware/-/raw/main"
+KERNEL_ORG_FW="https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain"
+GITHUB_ATH10K="https://github.com/kvalo/ath10k-firmware/raw/master"
 
 fetch_fw() {
     local DEST_DIR="\$1"
     local FILE="\$2"
+    local FILENAME="\$(basename \$FILE)"
     mkdir -p "\$DEST_DIR"
-    if curl -L -f -s -o "\$DEST_DIR/\$(basename \$FILE)" "\$GITLAB_FW/\$FILE"; then
+    if curl -L -f -s -o "\$DEST_DIR/\$FILENAME" "\$GITLAB_FW/\$FILE" || \
+       curl -L -f -s -o "\$DEST_DIR/\$FILENAME" "\$KERNEL_ORG_FW/\$FILE"; then
         echo ">>>   OK: \$FILE"
     else
         echo ">>>   WARN: Failed to fetch \$FILE (non-fatal)"
     fi
+    return 0
+}
+
+fetch_ath10k() {
+    local DEST_DIR="\$1"
+    local FILE="\$2"
+    local FILENAME="\$(basename \$FILE)"
+    mkdir -p "\$DEST_DIR"
+    if curl -L -f -s -o "\$DEST_DIR/\$FILENAME" "\$GITLAB_FW/ath10k/\$FILE" || \
+       curl -L -f -s -o "\$DEST_DIR/\$FILENAME" "\$KERNEL_ORG_FW/ath10k/\$FILE" || \
+       curl -L -f -s -o "\$DEST_DIR/\$FILENAME" "\$GITHUB_ATH10K/\$FILE"; then
+        echo ">>>   OK: ath10k/\$FILE"
+    else
+        echo ">>>   WARN: Failed to fetch ath10k/\$FILE (non-fatal)"
+    fi
+    return 0
 }
 
 # --- WiFi: ath10k WCN3990 ---
 echo ">>> Fetching WiFi firmware (ath10k WCN3990)..."
-fetch_fw "/lib/firmware/ath10k/WCN3990/hw1.0" "ath10k/WCN3990/hw1.0/firmware-5.bin"
-fetch_fw "/lib/firmware/ath10k/WCN3990/hw1.0" "ath10k/WCN3990/hw1.0/board-2.bin"
-# Pin firmware-5.bin to prevent linux-firmware package from overwriting it
-chattr +i "/lib/firmware/ath10k/WCN3990/hw1.0/firmware-5.bin"
+fetch_ath10k "/lib/firmware/ath10k/WCN3990/hw1.0" "WCN3990/hw1.0/firmware-5.bin"
+fetch_ath10k "/lib/firmware/ath10k/WCN3990/hw1.0" "WCN3990/hw1.0/board-2.bin"
+chattr +i "/lib/firmware/ath10k/WCN3990/hw1.0/firmware-5.bin" 2>/dev/null || true
 
-# --- GPU: Adreno 630 (non-signed, universal for all SDM845) ---
+# --- GPU: Adreno 630 ---
 echo ">>> Fetching GPU firmware (Adreno 630)..."
 fetch_fw "/lib/firmware/qcom" "qcom/a630_sqe.fw"
 fetch_fw "/lib/firmware/qcom" "qcom/a630_gmu.bin"
-
-# --- GPU: Adreno 630 ZAP shader (signed, works on all non-secured SDM845) ---
-echo ">>> Fetching Adreno 630 ZAP shader..."
 fetch_fw "/lib/firmware/qcom/sdm845" "qcom/sdm845/a630_zap.mbn"
 
-# --- DSP/Modem blobs (signed, works on all non-secured SDM845) ---
+# --- DSP/Modem blobs ---
 echo ">>> Fetching DSP and modem firmware..."
 for fw in adsp.mbn cdsp.mbn mba.mbn modem.mbn wlanmdsp.mbn; do
     fetch_fw "/lib/firmware/qcom/sdm845" "qcom/sdm845/\$fw"
