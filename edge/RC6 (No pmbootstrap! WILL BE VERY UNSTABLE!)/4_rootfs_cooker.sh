@@ -67,26 +67,20 @@ apt-get install -y ${UI_PKG} ${DM_PKG} ${EXTRA_PKG}
 
 # 6. Qualcomm Firmware Bundle (WiFi + GPU + DSP/Modem)
 echo ">>> Detecting installed kernel version..."
-KVER=""
-for f in /boot/vmlinuz-*; do
-    [ -f "\$f" ] && KVER="\$(echo \$f | sed 's|/boot/vmlinuz-||')"
-done
+KVER=\$(dpkg -l 'linux-image-*-sdm845' 2>/dev/null | grep '^ii' | awk '{print \$2}' | sed 's/linux-image-//')
 if [ -z "\$KVER" ]; then
     KVER=\$(uname -r)
 fi
 echo ">>> Kernel detected: \$KVER"
 
-GITLAB_FW="https://gitlab.com/kernel-firmware/linux-firmware/-/raw/main"
 KERNEL_ORG_FW="https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain"
-GITHUB_ATH10K="https://github.com/kvalo/ath10k-firmware/raw/master"
 
 fetch_fw() {
     local DEST_DIR="\$1"
     local FILE="\$2"
     local FILENAME="\$(basename \$FILE)"
     mkdir -p "\$DEST_DIR"
-    if curl -L -f -s -o "\$DEST_DIR/\$FILENAME" "\$GITLAB_FW/\$FILE" || \
-       curl -L -f -s -o "\$DEST_DIR/\$FILENAME" "\$KERNEL_ORG_FW/\$FILE"; then
+    if curl -L -f -s -o "\$DEST_DIR/\$FILENAME" "\$KERNEL_ORG_FW/\$FILE"; then
         echo ">>>   OK: \$FILE"
     else
         echo ">>>   WARN: Failed to fetch \$FILE (non-fatal)"
@@ -94,25 +88,10 @@ fetch_fw() {
     return 0
 }
 
-fetch_ath10k() {
-    local DEST_DIR="\$1"
-    local FILE="\$2"
-    local FILENAME="\$(basename \$FILE)"
-    mkdir -p "\$DEST_DIR"
-    if curl -L -f -s -o "\$DEST_DIR/\$FILENAME" "\$GITLAB_FW/ath10k/\$FILE" || \
-       curl -L -f -s -o "\$DEST_DIR/\$FILENAME" "\$KERNEL_ORG_FW/ath10k/\$FILE" || \
-       curl -L -f -s -o "\$DEST_DIR/\$FILENAME" "\$GITHUB_ATH10K/\$FILE"; then
-        echo ">>>   OK: ath10k/\$FILE"
-    else
-        echo ">>>   WARN: Failed to fetch ath10k/\$FILE (non-fatal)"
-    fi
-    return 0
-}
-
 # --- WiFi: ath10k WCN3990 ---
 echo ">>> Fetching WiFi firmware (ath10k WCN3990)..."
-fetch_ath10k "/lib/firmware/ath10k/WCN3990/hw1.0" "WCN3990/hw1.0/firmware-5.bin"
-fetch_ath10k "/lib/firmware/ath10k/WCN3990/hw1.0" "WCN3990/hw1.0/board-2.bin"
+fetch_fw "/lib/firmware/ath10k/WCN3990/hw1.0" "ath10k/WCN3990/hw1.0/firmware-5.bin"
+fetch_fw "/lib/firmware/ath10k/WCN3990/hw1.0" "ath10k/WCN3990/hw1.0/board-2.bin"
 chattr +i "/lib/firmware/ath10k/WCN3990/hw1.0/firmware-5.bin" 2>/dev/null || true
 
 # --- GPU: Adreno 630 ---
