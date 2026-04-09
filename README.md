@@ -93,13 +93,14 @@ fastboot reboot (DO NOT UNPLUG UNTIL IT REBOOTS! ITS ACTIVELY WRITING TO NAND FR
 | :--- | :--- | :--- |
 | **CPU/GPU** | ✅ Working* | Full hardware acceleration via Freedreno. |
 | **Wi-Fi** | ✅ Stable | Fixed via TFTP + Pristine Kernel Firmware. |
-| **Audio** | ✅ Working | Requires ALSA UCM2 maps (included). |
+| **Audio** | ❌ DEAD | Requires ALSA UCM2 maps (included). |
 | **Touch/LCD** | ✅ Working | Native support. |
 | **Cellular/LTE** | ⚠️ Testing | Modem initializes; requires `mcfg.tmp` injection. |
 | **Sensors** | ❌ Disabled | SLPI disabled to ensure WiFi/TrustZone stability. |
 * Possible bugs with the pmOS kernel, as its having bugs (similar behaviour to stock postmarketOS v25.06)
 kernel 6.14-RC5 is what i currently use, will build against newer kernel! (can be done using edge or v25.12 version of pmOS)
 * Recent builds against the EDGE channel of postmarketOS results in a Kernel Race Condition where the display doesnt fully Initialize in time (present on Kernel 6.16.7) Roughly 30-60% of the time its a Bad init
+* The newest build no longer suffers the display 
 ---
 
 ## Troubleshooting
