@@ -28,7 +28,7 @@
 ---
 
 ## RC8
-**Phrog / greetd**
+**Phrog / greetd** (REMOVED TEMPORARILY)
 - Replaced GDM3 with `greetd` + `phrog` — login screen is native Phosh lockscreen, touch-friendly
 - No more broken GNOME UI state on first boot
 - Confirmed Phrog is the official greeter for Mobian/beryllium (FOSDEM 2025 demo was a Poco F1)
