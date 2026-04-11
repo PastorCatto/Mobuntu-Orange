@@ -1,7 +1,7 @@
 # Mobuntu Orange
 **Document Version 4.1 — RC10.1 "The UI & Firmware Archive Update"**
 
-> **Note:** This project was co-developed with an AI collaborator (Claude, Anthropic). The build scripts are intentionally readable and modular for long-term maintainability.
+> **Note:** This project was co-developed with an AI collaborator (Claude, Anthropic), and arkadin91 (as of RC7). The build scripts are intentionally readable and modular for long-term maintainability.
 
 ---
 
