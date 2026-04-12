@@ -1,0 +1,10 @@
+PLACE "firmware.tar.gz" in the Device Folder (for your device) 
+
+ie. firmware/xiaomi-beryllium/firmware.tar.gz
+
+
+
+IF YOU DONT PLACE ANTHING HERE, THATS OKAY! (we fall back to git, and if its BAD, we pull from Oneplus, Dont worry, we warn you if that happens!)
+
+NOT REQUIRED!
+

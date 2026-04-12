@@ -1,0 +1,19 @@
+Run the scripts in this order 
+
+THIS IS THE LAYOUT THE SCRIPTS NEED TO BE!
+
+Run #1 to setup ubuntu version, desktop UI, username, password, and any needed packages (only needs to be done once, unless you want to change something)
+
+Run #2 to pull kernel (if you put the kernel in the kernel_payload, and its ready, we just prep it in this stage)
+
+Run #3 to build the rootfs, ui, and all the magic bits and pieces! 
+
+Run #4 If you need to poke around and fix something, or change anything inside the system before you pack it up for Flashing!
+
+Run #5 when your ready to seal it up, first makes a full sized image, SDCARD COMPATIBLE!(Size set when asked earlier, Default 12GB image) then convert that SDCARD image to a Fastboot Sparse image (keeping both!)
+
+Flash boot (ie fastboot flash boot /path/to/mobuntu-beryllium-plucky-boot.img)
+
+either Flash the SDCARD image to an Sdcard and boot, OR
+
+fastboot flash -S 100M userdata /path/to/mobuntu-beryllium-plucky-root_sparse.img (!!!HAS TO BE THE SPARSE ONE!!!)
