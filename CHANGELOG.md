@@ -5,6 +5,53 @@
 
 ---
 
+## RC11 (Current)
+**ARM64 Host Support**
+- Script 1 now detects host architecture via `uname -m` at startup
+- ARM64 hosts skip QEMU entirely — `qemu-user-static` and `binfmt-support` not installed
+- x86-64 hosts retain full existing QEMU + binfmt path
+- WSL2 binfmt injection now gated behind x86-64 check — will not run on ARM64 hosts
+- Script 3 debootstrap branches by host arch: ARM64 uses single-stage, x86-64 uses foreign + QEMU second stage
+- Script 3 chroot execution branches by host arch: ARM64 uses direct `chroot`, x86-64 uses QEMU static binary
+- Script 4 (enter chroot) updated with same arch-aware logic — WSL2 block x86-only, chroot entry direct on ARM64
+- `HOST_ARCH` and `HOST_IS_ARM64` written to `build.env` for downstream scripts
+- `binfmt-support` package removed from ARM64 host dependency list
+
+**Kernel Version Pinning**
+- Added `KERNEL_VERSION_PIN` field to device configs
+- Script 2 checks for pin before scraping repo — if set, fetches exact version directly
+- If pinned version not found in repo, build fails with a list of available versions
+- Empty pin falls back to latest (existing behaviour)
+- Beryllium configs pinned to `6.18.20` — confirmed stable, avoids regressions from 6.18.21+
+- OnePlus configs left unpinned
+
+**Ubuntu 26.04 Codename Fix**
+- Corrected `devel` to `resolute` — the actual Ubuntu 26.04 codename served by mirrors
+- Debootstrap symlink auto-created at preflight: `resolute -> gutsy` if missing
+- `resolute` is now the default release selection (option 3, press Enter)
+- `quill` placeholder retained but falls back to `resolute` instead of `noble`
+- 25.04 (plucky) removed from picker — EOL
+
+**UI Package Pinning**
+- All UI installs now use `-t` to pin to the correct apt source
+- Phosh, phrog, greetd pinned to `-t staging` (Mobian repo)
+- Ubuntu Desktop Minimal, Unity, Plasma Desktop, Plasma Mobile, Lomiri pinned to `-t "$UBUNTU_RELEASE"` (Ubuntu repo)
+- Prevents Mobian repo from satisfying Ubuntu UI package requests with incompatible versions
+
+**Chroot Script Rewrite**
+- Rewrote chroot heredoc using a split two-stage approach to fix persistent expansion bugs
+- Stage 1: small `INJECT_EOF` heredoc writes host variables into chroot script header
+- Stage 2: single-quoted `CHROOT_EOF` heredoc appends all build logic with no outer expansion
+- Eliminates `cat: '': No such file or directory` errors caused by unescaped variables in unquoted heredoc
+- Fixes script loop regression where script 3 would restart from the top after completing
+
+**Bug Fixes**
+- Fixed binfmt hex magic bytes being corrupted by Python string replacement — switched to binary file patching and `printf | sudo tee` pattern
+- Fixed script 4 (enter chroot) broken by same corruption — rewritten directly with `cat << 'ENDOFFILE'`
+- Fixed single-quote-inside-single-quote parse error in binfmt registration string
+
+---
+
 ## RC10.1 (Latest)
 **UI Picker**
 - Script 1 now prompts for desktop environment: Phosh, Ubuntu Desktop Minimal, Unity, Plasma Desktop, Plasma Mobile, Lomiri
@@ -35,6 +82,35 @@
 
 ---
 
+
+---
+
+## RC10.2 / Pre-Release 1.0
+**Audio — PipeWire restored**
+- Reverted from PulseAudio back to PipeWire — confirmed working with proper UCM2 maps in place
+- RC10.1 used PulseAudio following postmarketOS recommendation, but PipeWire works correctly once UCM2 maps are present
+- `pipewire pipewire-pulse wireplumber` restored to base system install in script 3
+
+**UCM2 Maps**
+- `alsa-ucm-conf` now installed pinned to Ubuntu release (`apt-get install -t ${UBUNTU_RELEASE} alsa-ucm-conf`) — prevents Mobian repo from pulling a version ahead of Ubuntu
+- UCM2 maps harvested from arkadin91's reference image and bundled into `firmware.tar.gz`:
+  - `usr/share/alsa/ucm2/Xiaomi/beryllium/`
+  - `usr/share/alsa/ucm2/Qualcomm/sdm845/`
+  - `usr/share/alsa/ucm2/module/snd_soc_sdm845.conf`
+  - `usr/share/alsa/ucm2/codecs/qcom-lpass`
+  - `usr/share/alsa/ucm2/conf.d/sdm845`
+- Firmware archive re-applied post-apt so UCM maps always win over package manager
+
+**Hardware Status (Confirmed Working — Pre-Release 1.0)**
+- ✅ Touch
+- ✅ Sound (speaker + headphones via UCM2 + PipeWire)
+- ✅ WiFi
+- ✅ Bluetooth
+- ❌ Modem — disabled for now, causes WiFi and BT to crash when active
+
+**Modem**
+- Modem firmware present but modem stack intentionally not started
+- Will be revisited in a future RC once the WiFi/BT crash on modem init is investigated
 ## RC10
 **Device Config System**
 - Introduced `devices/*.conf` device profile system — all scripts source device config via `build.env`
@@ -123,29 +199,3 @@
 
 ---
 
-## RC10.2 / Pre-Release 1.0 🎉
-**Audio — PipeWire restored**
-- Reverted from PulseAudio back to PipeWire — confirmed working with proper UCM2 maps in place
-- RC10.1 used PulseAudio following postmarketOS recommendation, but PipeWire works correctly once UCM2 maps are present
-- `pipewire pipewire-pulse wireplumber` restored to base system install in script 3
-
-**UCM2 Maps**
-- `alsa-ucm-conf` now installed pinned to Ubuntu release (`apt-get install -t ${UBUNTU_RELEASE} alsa-ucm-conf`) — prevents Mobian repo from pulling a version ahead of Ubuntu
-- UCM2 maps harvested from arkadin91's reference image and bundled into `firmware.tar.gz`:
-  - `usr/share/alsa/ucm2/Xiaomi/beryllium/`
-  - `usr/share/alsa/ucm2/Qualcomm/sdm845/`
-  - `usr/share/alsa/ucm2/module/snd_soc_sdm845.conf`
-  - `usr/share/alsa/ucm2/codecs/qcom-lpass`
-  - `usr/share/alsa/ucm2/conf.d/sdm845`
-- Firmware archive re-applied post-apt so UCM maps always win over package manager
-
-**Hardware Status (Confirmed Working — Pre-Release 1.0)**
-- ✅ Touch
-- ✅ Sound (speaker + headphones via UCM2 + PipeWire)
-- ✅ WiFi
-- ✅ Bluetooth
-- ❌ Modem — disabled for now, causes WiFi and BT to crash when active
-
-**Modem**
-- Modem firmware present but modem stack intentionally not started
-- Will be revisited in a future RC once the WiFi/BT crash on modem init is investigated
