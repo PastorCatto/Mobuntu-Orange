@@ -151,7 +151,7 @@ The rootfs UUID is stored in `/etc/kernel/cmdline` and the active DTB in `/etc/k
 | Release | Codename | Status |
 | :--- | :--- | :--- |
 | 24.04 LTS | noble | ✅ Recommended |
-| 24.10 | oracular | ✅ Supported |
+| 24.10 | oracular | ⚠️ Supported, End of Life (Same as 25.04) |
 | 25.04 | plucky | ⚠️ Removed, End of Life (Used for Testing)  |
 | 26.04 dev | devel | ⚠️ Experimental — warning shown at build time |
 | 26.04 LTS | quill | 🔒 Disabled until release |
