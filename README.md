@@ -155,7 +155,7 @@ The rootfs UUID is stored in `/etc/kernel/cmdline` and the active DTB in `/etc/k
 | 25.04 | plucky | ⚠️ Removed, End of Life (Used for Testing)  |
 | 26.04 dev | devel | ⚠️ Experimental — warning shown at build time |
 | 26.04 LTS | quill | 🔒 Disabled until release |
-
+* i initially planned on sun-setting 24.04 LTS, but due to recent testing (audio was custom mapped and my ALSA config would conflict, due to no longer needing hexagonrpcd 24.04 will NOT BE Sunset!)
 ---
 
 ## Build Workflow
