@@ -273,4 +273,4 @@ Special thanks to the Mobian and postmarketOS teams for SDM845 mainline kernel w
 
 ---
 
-*Mobuntu Orange — The orange looks nice on me, right?*
+*Mobuntu  — Life looked better with a little color!*
