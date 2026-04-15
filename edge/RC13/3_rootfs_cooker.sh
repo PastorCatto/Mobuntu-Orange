@@ -46,20 +46,69 @@ fi
 echo ">>> Staging kernel payload..."
 sudo cp -r kernel_payload/ "$ROOTFS_DIR/tmp/"
 
-echo ">>> Staging qcom-firmware initramfs hook..."
-QCOM_FW_HOOK="${SCRIPT_DIR}/firmware/${DEVICE_BRAND}-${DEVICE_CODENAME}/qcom-firmware"
-if [ -f "$QCOM_FW_HOOK" ]; then
-    echo ">>>   Using hook: $QCOM_FW_HOOK"
-    sudo cp "$QCOM_FW_HOOK" "$ROOTFS_DIR/tmp/qcom-firmware"
-    sudo chmod +x "$ROOTFS_DIR/tmp/qcom-firmware"
-else
-    echo ">>> WARNING: qcom-firmware hook not found."
-    echo ">>>   Place it at: firmware/${DEVICE_BRAND}-${DEVICE_CODENAME}/qcom-firmware"
-fi
+
 
 # Stage firmware archive into chroot for post-apt re-application
 SCRIPT_DIR="$(dirname "$0")"
 LOCAL_FW_ARCHIVE="${SCRIPT_DIR}/firmware/${DEVICE_BRAND}-${DEVICE_CODENAME}/firmware.tar.gz"
+
+echo ">>> Staging qcom-firmware initramfs hook..."
+QCOM_FW_HOOK_DEVICE="${SCRIPT_DIR}/firmware/${DEVICE_BRAND}-${DEVICE_CODENAME}/qcom-firmware"
+QCOM_FW_HOOK_ROOT="${SCRIPT_DIR}/qcom-firmware"
+echo ">>> Looking for qcom-firmware hook..."
+if [ -f "$QCOM_FW_HOOK_DEVICE" ]; then
+    echo ">>>   Found at: $QCOM_FW_HOOK_DEVICE"
+    sudo cp "$QCOM_FW_HOOK_DEVICE" "$ROOTFS_DIR/tmp/qcom-firmware"
+    sudo chmod +x "$ROOTFS_DIR/tmp/qcom-firmware"
+elif [ -f "$QCOM_FW_HOOK_ROOT" ]; then
+    echo ">>>   Found at project root: $QCOM_FW_HOOK_ROOT"
+    sudo cp "$QCOM_FW_HOOK_ROOT" "$ROOTFS_DIR/tmp/qcom-firmware"
+    sudo chmod +x "$ROOTFS_DIR/tmp/qcom-firmware"
+else
+    echo ">>> WARNING: qcom-firmware hook not found."
+    echo ">>>   Checked: $QCOM_FW_HOOK_DEVICE"
+    echo ">>>   Checked: $QCOM_FW_HOOK_ROOT"
+fi
+
+echo ">>> Staging 51-qcom.conf (WirePlumber ALSA tuning)..."
+WP_CONF_STAGE="${SCRIPT_DIR}/firmware/${DEVICE_BRAND}-${DEVICE_CODENAME}/51-qcom.conf"
+if [ -f "$WP_CONF_STAGE" ]; then
+    sudo cp "$WP_CONF_STAGE" "$ROOTFS_DIR/tmp/51-qcom.conf"
+    echo ">>>   51-qcom.conf staged."
+else
+    echo ">>>   WARNING: 51-qcom.conf not found at $WP_CONF_STAGE"
+fi
+
+echo ">>> Staging pmaports device files..."
+FW_DEVICE_DIR="${SCRIPT_DIR}/firmware/${DEVICE_BRAND}-${DEVICE_CODENAME}"
+
+# Source URLs (pmaports, commit 9550de18ec3b9ac2549a5aed196e705acf240afe)
+PMAPORTS_BASE="https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/9550de18ec3b9ac2549a5aed196e705acf240afe/device/community/device-xiaomi-beryllium"
+declare -A PMAPORTS_FILES=(
+    ["hexagonrpcd.confd"]="hexagonrpcd.confd"
+    ["q6voiced.conf"]="q6voiced.conf"
+    ["81-libssc.rules"]="81-libssc-xiaomi-beryllium.rules"
+)
+
+for LOCAL_NAME in hexagonrpcd.confd q6voiced.conf 81-libssc.rules; do
+    REMOTE_NAME="${PMAPORTS_FILES[$LOCAL_NAME]}"
+    if [ -f "$FW_DEVICE_DIR/$LOCAL_NAME" ]; then
+        sudo cp "$FW_DEVICE_DIR/$LOCAL_NAME" "$ROOTFS_DIR/tmp/$LOCAL_NAME"
+        echo ">>>   Staged: $LOCAL_NAME (from firmware folder)"
+    else
+        echo ">>>   $LOCAL_NAME not found locally — fetching from pmaports..."
+        if curl -fsSL -o "/tmp/pmaports_$LOCAL_NAME" "$PMAPORTS_BASE/$REMOTE_NAME" 2>/dev/null; then
+            sudo cp "/tmp/pmaports_$LOCAL_NAME" "$ROOTFS_DIR/tmp/$LOCAL_NAME"
+            sudo mkdir -p "$FW_DEVICE_DIR"
+            sudo cp "/tmp/pmaports_$LOCAL_NAME" "$FW_DEVICE_DIR/$LOCAL_NAME"
+            rm -f "/tmp/pmaports_$LOCAL_NAME"
+            echo ">>>   Fetched and staged: $LOCAL_NAME"
+            echo ">>>   Source: $PMAPORTS_BASE/$REMOTE_NAME"
+        else
+            echo ">>>   WARNING: Could not fetch $LOCAL_NAME — skipping."
+        fi
+    fi
+done
 if [ -f "$LOCAL_FW_ARCHIVE" ]; then
     echo ">>> Staging firmware archive for post-apt re-application..."
     sudo cp "$LOCAL_FW_ARCHIVE" "$ROOTFS_DIR/tmp/firmware.tar.gz"
@@ -389,19 +438,43 @@ echo ">>> Masking ALSA state services (conflicts with SDM845 audio)..."
 systemctl mask alsa-state 2>/dev/null || true
 systemctl mask alsa-restore 2>/dev/null || true
 
+echo ">>> Installing pmaports beryllium device files..."
+# hexagonrpcd config (SDSP target)
+if [ -f /tmp/hexagonrpcd.confd ]; then
+    mkdir -p /etc/conf.d
+    cp /tmp/hexagonrpcd.confd /etc/conf.d/hexagonrpcd-sdsp
+    echo ">>>   hexagonrpcd.confd installed."
+fi
+# q6voice daemon config
+if [ -f /tmp/q6voiced.conf ]; then
+    mkdir -p /etc/conf.d
+    cp /tmp/q6voiced.conf /etc/conf.d/q6voiced
+    echo ">>>   q6voiced.conf installed."
+fi
+# libssc udev rules
+if [ -f /tmp/81-libssc.rules ]; then
+    mkdir -p /usr/lib/udev/rules.d
+    cp /tmp/81-libssc.rules /usr/lib/udev/rules.d/81-libssc.rules
+    echo ">>>   81-libssc udev rules installed."
+fi
+
 echo ">>> Installing qcom-firmware initramfs hook..."
-cp /tmp/qcom-firmware /usr/share/initramfs-tools/hooks/qcom-firmware
-chmod +x /usr/share/initramfs-tools/hooks/qcom-firmware
+if [ -f /tmp/qcom-firmware ]; then
+    cp /tmp/qcom-firmware /usr/share/initramfs-tools/hooks/qcom-firmware
+    chmod +x /usr/share/initramfs-tools/hooks/qcom-firmware
+    echo ">>>   qcom-firmware hook installed."
+else
+    echo ">>>   WARNING: qcom-firmware hook not staged — skipping."
+fi
 
 echo ">>> Installing WirePlumber ALSA tuning config..."
-WP_CONF_SRC="${SCRIPT_DIR}/devices/${DEVICE_CODENAME}-51-qcom.conf"
-if [ -f "$WP_CONF_SRC" ]; then
-    sudo mkdir -p "$ROOTFS_DIR/usr/share/wireplumber/wireplumber.conf.d"
-    sudo cp "$WP_CONF_SRC" "$ROOTFS_DIR/usr/share/wireplumber/wireplumber.conf.d/51-qcom.conf"
-    echo ">>> 51-qcom.conf staged from devices/ folder."
+echo ">>> Installing WirePlumber ALSA tuning config..."
+if [ -f "/tmp/51-qcom.conf" ]; then
+    mkdir -p /usr/share/wireplumber/wireplumber.conf.d
+    cp /tmp/51-qcom.conf /usr/share/wireplumber/wireplumber.conf.d/51-qcom.conf
+    echo ">>>   51-qcom.conf installed."
 else
-    echo ">>> WARNING: $WP_CONF_SRC not found — audio tuning config missing."
-    echo ">>> Create it with mobuntu-developer-masterkit or copy manually."
+    echo ">>>   WARNING: 51-qcom.conf not staged — audio tuning config missing."
 fi
 
 if [ -n "$DEVICE_SERVICES" ]; then
@@ -440,7 +513,7 @@ if [ -n "$EXTRA_PKG" ]; then
 fi
 
 # ------- Cleanup -------
-rm -rf /tmp/kernel_payload /tmp/firmware.tar.gz /tmp/zz-qcom-bootimg /tmp/bootimg-initrd-hook /tmp/qcom-firmware
+rm -rf /tmp/kernel_payload /tmp/firmware.tar.gz /tmp/zz-qcom-bootimg /tmp/bootimg-initrd-hook /tmp/qcom-firmware /tmp/51-qcom.conf /tmp/hexagonrpcd.confd /tmp/q6voiced.conf /tmp/81-libssc.rules
 apt-get clean
 echo ">>> Chroot build complete."
 CHROOT_EOF

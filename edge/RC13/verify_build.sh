@@ -86,28 +86,21 @@ echo "--- Packages ---"
 REQUIRED_PKGS="qrtr-tools rmtfs pd-mapper tqftpserv protection-domain-mapper \
                pipewire wireplumber alsa-ucm-conf qcom-phone-utils"
 
-for pkg in $REQUIRED_PKGS; do
-    if chroot "$ROOTFS_DIR" dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
+for pkg in $REQUIRED_PKGS hexagonrpcd; do
+    if grep -ql "^Package: $pkg$" "$ROOTFS_DIR/var/lib/dpkg/info/${pkg}.list" 2>/dev/null ||        grep -q "^Package: $pkg$" "$ROOTFS_DIR/var/lib/dpkg/status" 2>/dev/null; then
         ok "$pkg installed"
     else
         fail "$pkg NOT installed"
-        # Dependency warnings
         case "$pkg" in
-            qrtr-tools) warn "pd-mapper and rmtfs depend on qrtr-tools" ;;
-            rmtfs)      warn "ADSP/modem firmware access will fail" ;;
-            pd-mapper)  warn "Protection domain mapping will fail — expect subsystem crashes" ;;
-            wireplumber) warn "Audio routing will not work" ;;
+            qrtr-tools)    warn "pd-mapper and rmtfs depend on qrtr-tools" ;;
+            rmtfs)         warn "ADSP/modem firmware access will fail" ;;
+            pd-mapper)     warn "Protection domain mapping will fail" ;;
+            wireplumber)   warn "Audio routing will not work" ;;
             alsa-ucm-conf) warn "ALSA UCM maps missing — no audio profiles" ;;
+            hexagonrpcd)   warn "ADSP/audio will not work" ;;
         esac
     fi
 done
-
-# Ensure hexagonrpcd is NOT installed (causes ADSP crash on warm boot)
-if chroot "$ROOTFS_DIR" dpkg -l hexagonrpcd 2>/dev/null | grep -q "^ii"; then
-    fail "hexagonrpcd is installed — will cause ADSP crash on warm boot, remove it"
-else
-    ok "hexagonrpcd not present (correct)"
-fi
 
 # -------------------------------------------------------
 # Step 6: Check services enabled
@@ -115,7 +108,7 @@ fi
 echo ""
 echo "--- Services ---"
 
-REQUIRED_SVCS="qrtr-ns rmtfs pd-mapper tqftpserv"
+REQUIRED_SVCS="qrtr-ns rmtfs pd-mapper tqftpserv hexagonrpcd"
 
 for svc in $REQUIRED_SVCS; do
     if [ -f "$ROOTFS_DIR/etc/systemd/system/multi-user.target.wants/${svc}.service" ] || \
@@ -132,11 +125,11 @@ done
 echo ""
 echo "--- Service Ordering ---"
 
-for svc in pd-mapper rmtfs; do
+for svc in pd-mapper rmtfs hexagonrpcd; do
     if [ -f "$ROOTFS_DIR/etc/systemd/system/${svc}.service.d/ordering.conf" ]; then
         ok "${svc} ordering drop-in present"
     else
-        warn "${svc} ordering drop-in missing — service may start before qrtr-ns"
+        warn "${svc} ordering drop-in missing — may start out of order"
     fi
 done
 
@@ -195,7 +188,60 @@ for fw in $FW_FILES; do
 done
 
 # -------------------------------------------------------
-# Step 11: Check build color matches hostname
+# Step 11: Check ALSA services masked
+# -------------------------------------------------------
+echo ""
+echo "--- ALSA Service Masking ---"
+
+for svc in alsa-state alsa-restore; do
+    if [ -L "$ROOTFS_DIR/etc/systemd/system/${svc}.service" ]; then
+        TARGET=$(readlink "$ROOTFS_DIR/etc/systemd/system/${svc}.service")
+        if echo "$TARGET" | grep -q "dev/null"; then
+            ok "${svc} masked"
+        else
+            warn "${svc} symlink exists but not masked (points to $TARGET)"
+        fi
+    else
+        warn "${svc} not masked — may conflict with SDM845 audio"
+    fi
+done
+
+# -------------------------------------------------------
+# Step 12: Check qcom-firmware initramfs hook
+# -------------------------------------------------------
+echo ""
+echo "--- Initramfs Hook ---"
+
+if [ -f "$ROOTFS_DIR/usr/share/initramfs-tools/hooks/qcom-firmware" ]; then
+    ok "qcom-firmware initramfs hook present"
+    if [ -x "$ROOTFS_DIR/usr/share/initramfs-tools/hooks/qcom-firmware" ]; then
+        ok "qcom-firmware hook is executable"
+    else
+        warn "qcom-firmware hook is not executable"
+    fi
+else
+    fail "qcom-firmware initramfs hook missing — firmware may not load on boot"
+fi
+
+# -------------------------------------------------------
+# Step 13: Check autoresize service
+# -------------------------------------------------------
+echo ""
+echo "--- Autoresize ---"
+
+if [ -f "$ROOTFS_DIR/etc/systemd/system/mobuntu-resize.service" ]; then
+    ok "mobuntu-resize.service present"
+    if [ -f "$ROOTFS_DIR/etc/mobuntu-resize-pending" ]; then
+        ok "resize pending flag set (will run on first boot)"
+    else
+        warn "resize pending flag missing — autoresize may not trigger"
+    fi
+else
+    warn "mobuntu-resize.service not present — partition will not auto-expand"
+fi
+
+# -------------------------------------------------------
+# Step 14: Check build color matches hostname
 # -------------------------------------------------------
 echo ""
 echo "--- Build Color ---"
