@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+PREREQS=""
+case $1 in
+    prereqs) echo "${PREREQS}"; exit 0;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+add_firmware qcom/sdm845/beryllium/a630_zap.mbn
+add_firmware qcom/sdm845/beryllium/ipa_fws.mbn
+add_firmware qcom/sdm845/beryllium/adsp.mbn
+add_firmware qcom/sdm845/beryllium/cdsp.mbn
+add_firmware qcom/sdm845/beryllium/slpi.mbn
+add_firmware qcom/a630_sqe.fw
+add_firmware qcom/a630_gmu.bin
