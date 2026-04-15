@@ -408,7 +408,7 @@ else
 fi
 
 echo ">>> Installing WirePlumber ALSA tuning config..."
-WP_CONF_SRC="${SCRIPT_DIR}/devices/${DEVICE_CODENAME}-51-qcom.conf"
+WP_CONF_SRC="$(dirname "$0")/devices/${DEVICE_BRAND}-${DEVICE_CODENAME}-51-qcom.conf"
 if [ -f "$WP_CONF_SRC" ]; then
     sudo mkdir -p "$ROOTFS_DIR/usr/share/wireplumber/wireplumber.conf.d"
     sudo cp "$WP_CONF_SRC" "$ROOTFS_DIR/usr/share/wireplumber/wireplumber.conf.d/51-qcom.conf"
