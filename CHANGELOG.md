@@ -1,201 +1,267 @@
-# Mobuntu Orange — Changelog
+# Mobuntu — Changelog
 
 > RC7–RC10.1 assisted by Claude Sonnet 4.6 (Anthropic)
-> Substantial progress and direction thanks to **arkadin91** — Ubuntu 26.04 Beta reference image, Kupfer lead, sdm845-mainline firmware discovery, and OTA script logic.
+> Substantial progress and direction thanks to **arkadin91** — Ubuntu 26.04 Beta reference image, Kupfer lead, sdm845-mainline firmware discovery, OTA script logic, WirePlumber tuning config, and pmaports device file discovery.
 
 ---
 
-## RC11 (Current)
+## RC13 (Current)
+
+**Branding**
+- Project renamed from Mobuntu Orange to Mobuntu
+- All scripts updated to reflect new name
+
+**Build Color System**
+- Script 1 now prompts for a build color after Ubuntu release selection
+- 10 colors available with channel recommendations in brackets: orange (24.04 stable), pink (26.04 stable), yellow (edge/beta)
+- Custom color option saves to build.env without conflict checking
+- Hostname auto-generated as `mobuntu-{color}` from selected color
+- `BUILD_COLOR` written to build.env alongside hostname
+
+**Panel Selection**
+- Panel (Tianma/EBBG) now selected in script 1 and saved to build.env as `BOOT_PANEL` and `BOOT_DTB_SELECTED`
+- Script 5 reads from build.env instead of re-prompting
+
+**QEMU Path Fix (Ubuntu 26.04 host)**
+- `qemu-user-static` package renamed in 26.04 — replaced with `qemu-user-binfmt-hwe`
+- Static binary path changed from `/usr/bin/qemu-aarch64-static` to `/usr/bin/qemu-aarch64`
+- Scripts 3 and 4 updated accordingly
+
+**Kernel Version Picker**
+- Script 2 now lists all available kernel series from Mobian pool when no pin is set
+- Displays available series with suggested `KERNEL_VERSION_PIN` value for each
+- Auto-selects latest if no input given
+- All index fetches switched from curl to wget for WSL2 host compatibility
+
+**Audio Stack (Critical Fix)**
+- `hexagonrpcd` removed, then re-added with correct systemd ordering drop-ins
+- Root cause of ADSP 60s watchdog crash identified as service startup race
+- `alsa-state` and `alsa-restore` masked — conflict with SDM845 audio subsystem
+- `51-qcom.conf` WirePlumber ALSA tuning config sourced from `firmware/{brand}-{codename}/` folder
+- pmaports beryllium device files added: `hexagonrpcd.confd`, `q6voiced.conf`, `81-libssc.rules`
+- Script 3 fetches pmaports files from upstream if not present locally, saves source URL to log
+- `hexagonrpcd` service ordering: `qrtr-ns` -> `rmtfs` -> `pd-mapper` -> `hexagonrpcd`
+
+**qcom-firmware Initramfs Hook**
+- `qcom-firmware` initramfs hook sourced from `firmware/{brand}-{codename}/qcom-firmware`
+- Falls back to project root if device-specific file not found
+- Bakes ADSP/CDSP/GPU firmware directly into initramfs for early boot availability
+- Hook install inside chroot is conditional — skips cleanly if not staged
+
+**Service Ordering**
+- systemd drop-in configs generated for `pd-mapper`, `rmtfs`, `hexagonrpcd`
+- All drop-ins use `printf` instead of heredocs to avoid CHROOT_EOF conflicts
+
+**Ubuntu Desktop Minimal Easter Egg**
+- When Ubuntu Desktop Minimal is selected, GNOME accent color is set to match `BUILD_COLOR`
+- Unmounted volumes hidden in Nautilus via dconf override
+- Written to `/etc/dconf/db/local.d/01-mobuntu-theme`
+
+**Squeekboard**
+- `phosh-osk-stub` and `lomiri-osk-stub` replaced with `squeekboard` (available in Ubuntu repos)
+- Phosh no longer uses `-t staging` flag — pulled directly from Ubuntu repos
+
+**Display Manager Fix**
+- Stale `display-manager.service` symlink removed before DM enable to prevent conflicts
+
+**Auto-resize on First Boot**
+- Script 5 prompts to enable first-boot auto-resize alongside verbosity selection
+- Installs `mobuntu-resize.service` — one-shot, runs `resize2fs` using `DEVICE_IMAGE_LABEL`
+- Creates `/etc/mobuntu-resize-pending` flag, deleted after successful resize
+- Device reboots automatically after resize completes
+
+**Watchdog / Auto Build**
+- `watchdog.sh` added — runs scripts 2 -> 3 -> verify -> 5 unattended
+- Hidden ZWJ (U+200D) signal character appended to success messages in scripts 2, 3, and verifier
+- Watchdog detects signal to confirm clean exit at each stage
+- Auto-sudo toggle with explicit risk warning — recommended for WSL2/VM use only
+- Output images tagged with `_autobuild` suffix on success
+- Timestamped log written per run
+
+**Build Verification**
+- `verify_build.sh` added — standalone cross-check of build.env vs rootfs
+- Checks: build.env completeness, device config, hostname, packages, services, ordering drop-ins, WirePlumber config, kernel, firmware, ALSA masking, initramfs hook, autoresize service, build color
+- Package checks use direct dpkg status file reads — no chroot required, works from x86 host
+- Hidden ZWJ signal on pass for watchdog integration
+
+**Developer Masterkit**
+- `mobuntu-developer-masterkit.py` added — Python curses TUI
+- Regedit-style split layout: left pane file tree, right pane content/menu
+- Sections: Device Config, APT, Kernel, Services, Audio, Verifier Generator, Staged Changes
+- Staged changes reviewed and applied in one shot
+- Generates device-specific verifier scripts
+- Generates `51-qcom.conf` WirePlumber configs with custom ALSA parameters
+- Generates systemd drop-in ordering configs
+- ESC returns to main menu, ESC x2 prompts quit
+- Requires `dialog` and Python 3 (installed by script 1 preflight)
+
+**Firmware Folder Structure**
+- Device-specific files now live in `firmware/{brand}-{codename}/`
+- Includes: `firmware.tar.gz`, `qcom-firmware`, `51-qcom.conf`, `hexagonrpcd.confd`, `q6voiced.conf`, `81-libssc.rules`
+- Script 3 looks in firmware folder first, falls back to curl from upstream sources
+
+**Noble (24.04) Support Restored**
+- `hexagonrpcd` removed as blocker — 24.04 now viable again with correct WirePlumber tuning
+- Noble requires the extended firmware bundle with UCM configs bundled
+- Warning added in script 1 when noble is selected
+
+**Version Markers**
+- RC version added to header comments across all scripts
+
+---
+
+## RC12 / Pre-Release 1.0
+
+**Audio Investigation**
+- Ran diagnostic script against arkadin91's reference image (Ubuntu 26.04, April 9 build)
+- Confirmed identical kernel (6.18.20-1), same firmware — difference is userspace only
+- Key finding: reference image has no `hexagonrpcd` — audio works via WirePlumber ALSA tuning alone
+- `51-qcom.conf` sourced from arkadin91's image: S16LE, 48000Hz, period-size 4096, period-num 6, headroom 512
+- `hexagonrpcd` confirmed as cause of ADSP 60s watchdog crash on warm boot — removed
+- `alsa-state` and `alsa-restore` identified as conflicting services
+- ADSP fastrpc missing `memory-region` in DTB confirmed via `/sys/firmware/fdt` inspection — cosmetic warning only, not root cause
+
+**Kernel Unpinning**
+- `KERNEL_VERSION_PIN` can now be commented out in device config
+- Script 2 falls back to latest available series when pin is absent
+
+**Ubuntu 26.04 Host Support**
+- QEMU package and binary path updated for 26.04 host environment
+- `whiptail` and `dialog` added to preflight host dependencies
+
+---
+
+## RC11
+
 **ARM64 Host Support**
-- Script 1 now detects host architecture via `uname -m` at startup
-- ARM64 hosts skip QEMU entirely — `qemu-user-static` and `binfmt-support` not installed
-- x86-64 hosts retain full existing QEMU + binfmt path
-- WSL2 binfmt injection now gated behind x86-64 check — will not run on ARM64 hosts
-- Script 3 debootstrap branches by host arch: ARM64 uses single-stage, x86-64 uses foreign + QEMU second stage
-- Script 3 chroot execution branches by host arch: ARM64 uses direct `chroot`, x86-64 uses QEMU static binary
-- Script 4 (enter chroot) updated with same arch-aware logic — WSL2 block x86-only, chroot entry direct on ARM64
-- `HOST_ARCH` and `HOST_IS_ARM64` written to `build.env` for downstream scripts
-- `binfmt-support` package removed from ARM64 host dependency list
+- Script 1 detects host architecture via `uname -m` at startup
+- ARM64 hosts skip QEMU entirely
+- x86-64 hosts retain full QEMU + binfmt path
+- Script 3 debootstrap and chroot execution branch by host arch
+- Script 4 updated with same arch-aware logic
+- `HOST_ARCH` and `HOST_IS_ARM64` written to build.env
 
 **Kernel Version Pinning**
-- Added `KERNEL_VERSION_PIN` field to device configs
-- Script 2 checks for pin before scraping repo — if set, fetches exact version directly
-- If pinned version not found in repo, build fails with a list of available versions
-- Empty pin falls back to latest (existing behaviour)
-- Beryllium configs pinned to `6.18.20` — confirmed stable, avoids regressions from 6.18.21+
-- OnePlus configs left unpinned
+- Added `KERNEL_VERSION_PIN` to device configs
+- Script 2 fetches exact version if pin set, latest if not
+- Beryllium configs pinned to `6.18.20`
 
 **Ubuntu 26.04 Codename Fix**
-- Corrected `devel` to `resolute` — the actual Ubuntu 26.04 codename served by mirrors
-- Debootstrap symlink auto-created at preflight: `resolute -> gutsy` if missing
-- `resolute` is now the default release selection (option 3, press Enter)
-- `quill` placeholder retained but falls back to `resolute` instead of `noble`
-- 25.04 (plucky) removed from picker — EOL
+- Corrected `devel` to `resolute`
+- Debootstrap symlink auto-created at preflight
+- `resolute` set as default release
+- 25.04 (plucky) removed — EOL
 
 **UI Package Pinning**
-- All UI installs now use `-t` to pin to the correct apt source
-- Phosh, phrog, greetd pinned to `-t staging` (Mobian repo)
-- Ubuntu Desktop Minimal, Unity, Plasma Desktop, Plasma Mobile, Lomiri pinned to `-t "$UBUNTU_RELEASE"` (Ubuntu repo)
-- Prevents Mobian repo from satisfying Ubuntu UI package requests with incompatible versions
+- All UI installs use `-t` to pin to correct apt source
+- Phosh/phrog/greetd pinned to `-t staging`
+- Ubuntu UI packages pinned to `-t "$UBUNTU_RELEASE"`
 
 **Chroot Script Rewrite**
-- Rewrote chroot heredoc using a split two-stage approach to fix persistent expansion bugs
-- Stage 1: small `INJECT_EOF` heredoc writes host variables into chroot script header
-- Stage 2: single-quoted `CHROOT_EOF` heredoc appends all build logic with no outer expansion
-- Eliminates `cat: '': No such file or directory` errors caused by unescaped variables in unquoted heredoc
-- Fixes script loop regression where script 3 would restart from the top after completing
+- Split two-stage heredoc: `INJECT_EOF` for variables, `CHROOT_EOF` for build logic
+- Eliminates nested heredoc expansion bugs
 
 **Bug Fixes**
-- Fixed binfmt hex magic bytes being corrupted by Python string replacement — switched to binary file patching and `printf | sudo tee` pattern
-- Fixed script 4 (enter chroot) broken by same corruption — rewritten directly with `cat << 'ENDOFFILE'`
-- Fixed single-quote-inside-single-quote parse error in binfmt registration string
-
----
-
-## RC10.1 (Latest)
-**UI Picker**
-- Script 1 now prompts for desktop environment: Phosh, Ubuntu Desktop Minimal, Unity, Plasma Desktop, Plasma Mobile, Lomiri
-- Each UI sets the correct display manager automatically — greetd+phrog for Phosh/Lomiri, GDM3 for GNOME, LightDM for Unity, SDDM for Plasma
-- Lomiri shows an explicit warning and y/N confirmation before proceeding
-- UI selection flows into `build.env` as `UI_NAME`, `UI_PACKAGES`, `UI_DM`, `UI_EXTRA_REPOS`
-- Script 3 chroot install section is now UI-aware, branches on `UI_NAME`
-
-**Firmware Archive System**
-- Added `firmware/<brand>-<codename>/` directory structure
-- Script 3 now checks for a local `firmware.tar.gz` before attempting git clone
-- Three-tier priority: local archive → git clone → OnePlus 6 fallback
-- Each firmware directory ships with a `README.txt` containing harvest instructions
-- Confirmed working: WiFi and GPU on Poco F1 using harvested firmware archive
-
-**Ubuntu 26.04 Support**
-- Added `devel` (26.04) to release picker with experimental warning + y/N confirm
-- Added `quill` (26.04 stable) as a disabled placeholder — falls back to noble
-- Trivial to enable when 26.04 officially releases
-
-**Bug Fixes**
-- Removed `/boot/efi` fstab entry — fake UUID `EEFB-EEFB` was causing systemd to drop to emergency mode on every boot
-- Fixed `cp: cannot overwrite non-directory` when staging firmware — changed `cp -r dir` to `cp -r dir/.`
-- Fixed `curl: command not found` in chroot — curl now installed in a dedicated bootstrap step before Mobian repo is added
-- Fixed nested heredoc `cat: '': No such file or directory` errors — replaced inner `cat > file << EOF` blocks with `printf` for greetd config and `/etc/hosts`
-- Fixed chroot step ordering — Ubuntu sources written and curl installed before Mobian GPG key fetch
-- Renumbered all chroot steps to reflect new ordering
-
----
-
+- binfmt hex magic byte corruption fixed
+- Script 4 enter chroot rewritten
+- Single-quote parse error in binfmt registration fixed
 
 ---
 
 ## RC10.2 / Pre-Release 1.0
-**Audio — PipeWire restored**
-- Reverted from PulseAudio back to PipeWire — confirmed working with proper UCM2 maps in place
-- RC10.1 used PulseAudio following postmarketOS recommendation, but PipeWire works correctly once UCM2 maps are present
-- `pipewire pipewire-pulse wireplumber` restored to base system install in script 3
+
+**Audio — PipeWire Restored**
+- Reverted from PulseAudio back to PipeWire
+- `pipewire pipewire-pulse wireplumber` restored to base install
 
 **UCM2 Maps**
-- `alsa-ucm-conf` now installed pinned to Ubuntu release (`apt-get install -t ${UBUNTU_RELEASE} alsa-ucm-conf`) — prevents Mobian repo from pulling a version ahead of Ubuntu
-- UCM2 maps harvested from arkadin91's reference image and bundled into `firmware.tar.gz`:
-  - `usr/share/alsa/ucm2/Xiaomi/beryllium/`
-  - `usr/share/alsa/ucm2/Qualcomm/sdm845/`
-  - `usr/share/alsa/ucm2/module/snd_soc_sdm845.conf`
-  - `usr/share/alsa/ucm2/codecs/qcom-lpass`
-  - `usr/share/alsa/ucm2/conf.d/sdm845`
-- Firmware archive re-applied post-apt so UCM maps always win over package manager
+- `alsa-ucm-conf` pinned to Ubuntu release
+- UCM2 maps bundled into `firmware.tar.gz`
+- Firmware archive re-applied post-apt
 
-**Hardware Status (Confirmed Working — Pre-Release 1.0)**
-- ✅ Touch
-- ✅ Sound (speaker + headphones via UCM2 + PipeWire)
-- ✅ WiFi
-- ✅ Bluetooth
-- ❌ Modem — disabled for now, causes WiFi and BT to crash when active
+**Hardware Status (Confirmed)**
+- Touch, Sound, WiFi, Bluetooth working
+- Modem disabled — crashes WiFi/BT when active
 
-**Modem**
-- Modem firmware present but modem stack intentionally not started
-- Will be revisited in a future RC once the WiFi/BT crash on modem init is investigated
+---
+
+## RC10.1
+
+**UI Picker**
+- Script 1 prompts for desktop environment
+- Each UI sets correct display manager automatically
+- Lomiri shows warning and confirmation
+
+**Firmware Archive System**
+- `firmware/<brand>-<codename>/` directory structure
+- Three-tier priority: local archive -> git clone -> OnePlus 6 fallback
+
+**Ubuntu 26.04 Support**
+- `devel` (26.04) added with experimental warning
+- `quill` placeholder added, falls back to noble
+
+**Bug Fixes**
+- `/boot/efi` fstab entry removed — caused emergency mode
+- `cp: cannot overwrite non-directory` fixed
+- `curl: command not found` in chroot fixed
+- Nested heredoc errors fixed with printf
+
+---
+
 ## RC10
+
 **Device Config System**
-- Introduced `devices/*.conf` device profile system — all scripts source device config via `build.env`
-- Added device configs: `xiaomi-beryllium-tianma`, `xiaomi-beryllium-ebbg`, `oneplus-enchilada`, `oneplus-fajita`
-- Device configs carry all mkbootimg parameters, firmware method, kernel method, services, quirks, hostname, image label
-- Adding a new device requires only a new `.conf` file — no script changes needed
+- Introduced `devices/*.conf` device profile system
+- Added configs: beryllium (Tianma/EBBG), enchilada, fajita
+- New device requires only a new `.conf` file
 
 **Firmware**
-- Replaced droid-juicer with direct `git clone` of `gitlab.com/sdm845-mainline/firmware-xiaomi-beryllium`
-- Full firmware bundle confirmed: all beryllium signed blobs + ath10k WiFi board file + TAS2559 audio amp + ACDB audio calibration + DSP userspace libs + sensor configs
-- Added OnePlus 6 fallback: if git clone fails, copies `sdm845/oneplus6/` blobs from host `linux-firmware` into `sdm845/beryllium/` with a clear warning naming the source directory
-- OnePlus 6/6T use `apt` firmware method (blobs ship in upstream `linux-firmware`)
+- Replaced droid-juicer with direct git clone of sdm845-mainline firmware repo
+- OnePlus 6 fallback added
 
 **Boot Method Abstraction**
-- Script 5 branches on `BOOT_METHOD`: `mkbootimg` (fully implemented), `uboot` (placeholder), `uefi` (placeholder)
-- `BOOT_DTB_APPEND`, `BOOT_PANEL_PICKER`, all mkbootimg offsets driven from device config
+- Script 5 branches on `BOOT_METHOD`
+- mkbootimg implemented, uboot and uefi as placeholders
 
 **Script 1 Auto-Run**
-- After saving `build.env`, script 1 optionally chains directly into scripts 2 and 3
-
-**Script Renumbering**
-- Finalised 5-script pipeline: old `4,5,6` → new `3,4,5`
+- Script 1 optionally chains into scripts 2 and 3
 
 ---
 
 ## RC9
-**Phrog / greetd**
-- Replaced GDM3 with `greetd` + `phrog` — login screen is native Phosh lockscreen, touch-friendly
-- No more broken GNOME UI state on first boot
-- Confirmed Phrog is the official greeter for Mobian/beryllium (FOSDEM 2025 demo was a Poco F1)
-- `greeter` user created, `/etc/greetd/config.toml` written pointing to phrog
 
-**Kernel Hook (OTA-safe boot.img)** *(logic credit: arkadin91)*
-- Installed `/etc/kernel/postinst.d/zz-qcom-bootimg` — rebuilds `boot.img` automatically after every `apt upgrade` that updates the kernel
-- Installed `/etc/initramfs/post-update.d/bootimg` — same trigger after `update-initramfs`
-- `/etc/kernel/cmdline` written by script 5 with real UUID so hook works correctly
-- `/etc/kernel/boot_dtb` written by script 5 so hook picks the correct panel DTB
-- Hook filters on `*sdm845*` kernel version to avoid accidentally grabbing the generic Ubuntu kernel
+**Phrog / greetd**
+- Replaced GDM3 with greetd + phrog
+- `greeter` user created, config written
+
+**Kernel Hook (OTA-safe boot.img)**
+- `/etc/kernel/postinst.d/zz-qcom-bootimg` installed
+- `/etc/initramfs/post-update.d/bootimg` installed
+- Filters on `*sdm845*` kernel version
 
 **qbootctl**
-- Installed in rootfs — enables OTA-style slot updates without fastboot after first flash
-
-**Firmware Investigation (arkadin91 reference image)**
-- Reverse-engineered a working Ubuntu 26.04 ARM64 beryllium image (pre-first-boot)
-- Confirmed GPU, WiFi, BT worked before droid-juicer ran
-- Discovered `sdm845/beryllium/` blobs were manually staged — not tracked by dpkg
-- Confirmed `sdm845/a630_zap.mbn` ships in `linux-firmware` apt; beryllium-specific signed blobs do not
-- Confirmed OnePlus 6 firmware file list is structurally identical to beryllium (different binaries, device-signed)
-- Traced firmware source to `sdm845-mainline/firmware-xiaomi-beryllium` GitLab repo (pointed out by arkadin91 via Kupfer)
-
-**fstab** *(later removed in RC10.1)*
-- Added `/boot/efi vfat` stub entry — matched reference image layout, later found to cause emergency mode without the actual partition present
+- Installed in rootfs for OTA-style slot updates
 
 ---
 
 ## RC8
+
 **Build System**
-- 7-script pipeline inherited; deprecated scripts identified and removed; renumbering planned
 - `build.env` used to pass config between scripts
-- osm0sis mkbootimg fork confirmed required (Ubuntu package broken — GKI module error)
-- `sed -i 's/-Werror//g'` fix applied to libmincrypt Makefile
+- osm0sis mkbootimg fork confirmed required
+- `-Werror` fix applied to libmincrypt Makefile
 
 **Kernel**
-- Dynamic fetch from `repo.mobian.org` pool for latest `linux-image-*-sdm845` and headers
-- DTB confirmed appended to kernel binary (not `--dtb` flag) — required for SDM845 bootloader
-- DTB filenames confirmed: `sdm845-xiaomi-beryllium-tianma.dtb` / `-ebbg.dtb`
+- Dynamic fetch from `repo.mobian.org` pool
+- DTB confirmed appended to kernel binary
 
 **RootFS**
-- debootstrap two-stage build with QEMU arm64 binfmt
+- debootstrap two-stage with QEMU arm64 binfmt
 - WSL2 binfmt injection fallback
-- Nested heredoc bug fixed — chroot script written to mktemp file
-- `apt-get: command not found` bug fixed — explicit second stage + PATH
-- `mke2fs -d` broken — replaced with `fallocate` + `mkfs.ext4` + loop mount + `rsync -aHAXx`
+- `fallocate` + `mkfs.ext4` + `rsync` image build
 
-**Firmware (original strategy)**
-- `a630_sqe.fw`, `a630_gmu.bin` from `linux-firmware` apt
-- `a630_zap.mbn` curled from kernel.org
-- adsp/cdsp/mba/modem/venus/wlan via droid-juicer on first boot
-- Mobian repo added for droid-juicer, qrtr-tools, rmtfs, tqftpserv, pd-mapper
-
-**Bugs Fixed**
-- `return 1` inside fetch functions killed script with `set -e` — fixed with explicit `return 0`
-- `basename: missing operand` — fixed with `for f in /boot/vmlinuz-*sdm845*` loop
-- binfmt not active on WSL2 — added manual hex registration fallback
-- `Exec format error` in chroot — fixed with `qemu-aarch64-static` explicit invocation
-
----
-
+**Bug Fixes**
+- `return 1` with `set -e` fixed
+- `basename: missing operand` fixed
+- binfmt not active on WSL2 fixed
+- `Exec format error` in chroot fixed
