@@ -49,7 +49,7 @@ sudo cp -r kernel_payload/ "$ROOTFS_DIR/tmp/"
 
 
 # Stage firmware archive into chroot for post-apt re-application
-SCRIPT_DIR="$(dirname "$0")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCAL_FW_ARCHIVE="${SCRIPT_DIR}/firmware/${DEVICE_BRAND}-${DEVICE_CODENAME}/firmware.tar.gz"
 
 echo ">>> Staging qcom-firmware initramfs hook..."
@@ -77,6 +77,28 @@ if [ -f "$WP_CONF_STAGE" ]; then
     echo ">>>   51-qcom.conf staged."
 else
     echo ">>>   WARNING: 51-qcom.conf not found at $WP_CONF_STAGE"
+fi
+
+echo ">>> Staging remoteproc sequencing rule..."
+RPROC_RULE="${SCRIPT_DIR}/firmware/${DEVICE_BRAND}-${DEVICE_CODENAME}/82-beryllium-remoteproc.rules"
+RPROC_RULE_ROOT="${SCRIPT_DIR}/82-beryllium-remoteproc.rules"
+RPROC_TRIGGER="${SCRIPT_DIR}/firmware/${DEVICE_BRAND}-${DEVICE_CODENAME}/remoteproc-adsp-trigger.sh"
+RPROC_TRIGGER_ROOT="${SCRIPT_DIR}/remoteproc-adsp-trigger.sh"
+
+if [ -f "$RPROC_RULE" ]; then
+    sudo cp "$RPROC_RULE" "$ROOTFS_DIR/tmp/82-beryllium-remoteproc.rules"
+elif [ -f "$RPROC_RULE_ROOT" ]; then
+    sudo cp "$RPROC_RULE_ROOT" "$ROOTFS_DIR/tmp/82-beryllium-remoteproc.rules"
+else
+    echo ">>> WARNING: remoteproc udev rule not found — DSP sequencing will not be gated."
+fi
+
+if [ -f "$RPROC_TRIGGER" ]; then
+    sudo cp "$RPROC_TRIGGER" "$ROOTFS_DIR/tmp/remoteproc-adsp-trigger.sh"
+elif [ -f "$RPROC_TRIGGER_ROOT" ]; then
+    sudo cp "$RPROC_TRIGGER_ROOT" "$ROOTFS_DIR/tmp/remoteproc-adsp-trigger.sh"
+else
+    echo ">>> WARNING: remoteproc trigger script not found."
 fi
 
 echo ">>> Staging pmaports device files..."
@@ -113,14 +135,12 @@ if [ -f "$LOCAL_FW_ARCHIVE" ]; then
     sudo cp "$LOCAL_FW_ARCHIVE" "$ROOTFS_DIR/tmp/firmware.tar.gz"
 fi
 
-echo ">>> Copying mkbootimg into rootfs..."
-sudo cp /usr/local/bin/mkbootimg "$ROOTFS_DIR/usr/local/bin/mkbootimg"
-sudo chmod +x "$ROOTFS_DIR/usr/local/bin/mkbootimg"
+# mkbootimg is built natively inside the chroot (ARM64) — do NOT copy host x86 binary
 
 # -------------------------------------------------------
 # Step 3: Firmware staging (pre-chroot, method=git)
 # -------------------------------------------------------
-SCRIPT_DIR="$(dirname "$0")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCAL_FW_DIR="${SCRIPT_DIR}/firmware/${DEVICE_BRAND}-${DEVICE_CODENAME}"
 LOCAL_FW_ARCHIVE="${LOCAL_FW_DIR}/firmware.tar.gz"
 
@@ -266,6 +286,7 @@ FIRMWARE_METHOD="${FIRMWARE_METHOD}"
 UI_NAME="${UI_NAME}"
 UI_DM="${UI_DM}"
 EXTRA_PKG="${EXTRA_PKG}"
+BUILD_COLOR="${BUILD_COLOR}"
 INJECT_EOF
 
 # Step 2: Append the build logic with single-quoted heredoc (no outer expansion)
@@ -511,8 +532,33 @@ if [ -n "$EXTRA_PKG" ]; then
     apt-get install -y $EXTRA_PKG
 fi
 
+echo ">>> Installing remoteproc sequencing udev rule..."
+if [ -f /tmp/82-beryllium-remoteproc.rules ] && [ -f /tmp/remoteproc-adsp-trigger.sh ]; then
+    cp /tmp/82-beryllium-remoteproc.rules /usr/lib/udev/rules.d/82-beryllium-remoteproc.rules
+    cp /tmp/remoteproc-adsp-trigger.sh /usr/lib/udev/remoteproc-adsp-trigger.sh
+    chmod +x /usr/lib/udev/remoteproc-adsp-trigger.sh
+    udevadm control --reload-rules 2>/dev/null || true
+    echo ">>>   Remoteproc sequencing rule installed."
+else
+    echo ">>>   WARNING: remoteproc rule/trigger not staged — 60s crash risk remains."
+fi
+
+# ------- 18. Build mkbootimg natively (ARM64) -------
+echo ">>> Building mkbootimg natively for ARM64..."
+apt-get install -y git build-essential
+rm -rf /tmp/mkbootimg-build
+git clone --depth=1 https://github.com/osm0sis/mkbootimg /tmp/mkbootimg-build
+sed -i 's/-Werror//g' /tmp/mkbootimg-build/Makefile
+sed -i 's/-Werror//g' /tmp/mkbootimg-build/libmincrypt/Makefile
+make -C /tmp/mkbootimg-build
+cp /tmp/mkbootimg-build/mkbootimg /usr/local/bin/mkbootimg
+cp /tmp/mkbootimg-build/unpackbootimg /usr/local/bin/unpackbootimg
+chmod +x /usr/local/bin/mkbootimg /usr/local/bin/unpackbootimg
+rm -rf /tmp/mkbootimg-build
+echo ">>> mkbootimg (ARM64 native) installed."
+
 # ------- Cleanup -------
-rm -rf /tmp/kernel_payload /tmp/firmware.tar.gz /tmp/zz-qcom-bootimg /tmp/bootimg-initrd-hook /tmp/qcom-firmware /tmp/51-qcom.conf /tmp/q6voiced.conf /tmp/81-libssc.rules
+rm -rf /tmp/kernel_payload /tmp/firmware.tar.gz /tmp/zz-qcom-bootimg /tmp/bootimg-initrd-hook /tmp/qcom-firmware /tmp/51-qcom.conf /tmp/q6voiced.conf /tmp/81-libssc.rules /tmp/82-beryllium-remoteproc.rules /tmp/remoteproc-adsp-trigger.sh
 apt-get clean
 echo ">>> Chroot build complete."
 CHROOT_EOF

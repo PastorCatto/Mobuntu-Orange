@@ -109,6 +109,28 @@ fi
 # -------------------------------------------------------
 case "$BOOT_METHOD" in
 mkbootimg)
+    echo ">>> Regenerating initramfs with firmware in place..."
+    sudo chroot "$ROOTFS_DIR" update-initramfs -u -k all
+
+    echo ">>> Verifying firmware blobs inside initrd (warn only)..."
+    INITRD_CHECK=$(ls -1tr "$ROOTFS_DIR"/boot/initrd.img-*sdm845* 2>/dev/null | tail -n 1)
+    if [ -n "$INITRD_CHECK" ]; then
+        INITRD_CONTENTS=$(lsinitramfs "$INITRD_CHECK" 2>/dev/null || true)
+        for blob in "usr/lib/firmware/qcom/a630_sqe.fw" \
+                    "usr/lib/firmware/qcom/a630_gmu.bin" \
+                    "usr/lib/firmware/qcom/sdm845/beryllium/adsp.mbn" \
+                    "usr/lib/firmware/qcom/sdm845/beryllium/cdsp.mbn"; do
+            if echo "$INITRD_CONTENTS" | grep -q "$blob"; then
+                echo "  [OK]   $blob"
+            else
+                echo "  [WARN] $blob — NOT found in initrd (non-fatal)"
+            fi
+        done
+        echo ">>> Initrd size: $(du -h $INITRD_CHECK | cut -f1)"
+    else
+        echo ">>> WARNING: Could not locate initrd for verification — proceeding."
+    fi
+
     echo ">>> Finding boot assets..."
     KERNEL=$(ls -1tr "$ROOTFS_DIR"/boot/vmlinuz-*sdm845* 2>/dev/null | tail -n 1)
     INITRD=$(ls -1tr "$ROOTFS_DIR"/boot/initrd.img-*sdm845* 2>/dev/null | tail -n 1)
