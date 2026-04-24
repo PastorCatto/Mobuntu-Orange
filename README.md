@@ -9,6 +9,20 @@ Mobuntu is a toolkit that builds a full Ubuntu ARM64 image for SDM845-based phon
 
 No postmarketOS. No pmbootstrap. Everything is built via a debos recipe pipeline inside a debootstrap rootfs, then sealed and flashed via fastboot or Hekate.
 
+(As of RC13, we arent just orange, we are now color coded to Ubuntu releases!)
+
+Ubuntu 24.04 = Orange (Sunset/No LONGER SUPPORTED)
+
+Ubuntu 26.04 = Pink  
+
+Ubuntu DEVEL = Yellow 
+(EDGE Builds are always Yellow!)
+
+(Thought Color Coding would clean it up a bit!)
+
+# Due to upstream changes with certian qcom packages, we have transitioned to debos for our OS installer now (RC15)
+# Due to constant changes here, we now have the LEGACY version included (rc14), as RC15 introduced a bunch more goodies and configuration (documentation will be updated shortly to reflect)
+
 ---
 
 ## Supported Devices
@@ -43,6 +57,7 @@ Adding a new device requires only a `devices/<brand>-<codename>.conf` and a matc
 | Camera | ❌ Not working | Out of scope for now |
 | NFC | ❌ No hardware | Not present on Poco F1 |
 
+# RC10.2.1 and RC13.1 Addresses the audio regression introduced by the phantom bug, will do more testing soon and test a pre-1.0 build soon.
 ---
 
 ## Architecture
@@ -211,9 +226,10 @@ Written to `/etc/kernel/cmdline` by `5_seal_rootfs.sh`. The active DTB is stored
 
 | Release | Codename | Status |
 | :--- | :--- | :--- |
-| 24.04 LTS | noble | ✅ Supported |
-| 24.10 | oracular | ✅ Supported |
-| 26.04 beta | resolute | ✅ Recommended — default |
+| 24.04 LTS | noble | ✅ Recommended |
+| 24.10 | oracular | ⚠️ Supported, End of Life (Same as 25.04) |
+| 25.04 | plucky | ⚠️ Removed, End of Life (Used for Testing)  |
+| 26.04 dev | devel | ⚠️ Experimental — warning shown at build time |
 | 26.04 LTS | quill | 🔒 Disabled until release |
 
 ---
@@ -360,4 +376,4 @@ Special thanks to the Mobian and postmarketOS teams for SDM845 mainline kernel w
 
 ---
 
-*Mobuntu — Ubuntu on everything.*
+*Mobuntu — Ubuntu on everything, with colors!*
