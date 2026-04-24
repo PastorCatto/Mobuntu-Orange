@@ -22,7 +22,9 @@ Ubuntu DEVEL = Yellow
 
 (Thought Color Coding would clean it up a bit!)
 
-# I've DISABLED the "Template Repo" toggle for this repo! (Due to Ubuntu shipping an x86 version of mkbootimg in the ARM64 package, we added the emergency hotfix to be run inside the chroot between step 3 and 5)
+# Due to upstream changes with certian qcom packages, we have transitioned to debos for our OS installer now (RC15)
+# Due to constant changes here, we now have the LEGACY version included (rc14), as RC15 introduced a bunch more goodies and configuration (documentation will be updated shortly to reflect)
+
 ---
 
 ## Supported Devices
