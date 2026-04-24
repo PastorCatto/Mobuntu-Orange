@@ -64,16 +64,6 @@ fi
 # Step 3: Boot verbosity + autoresize
 # -------------------------------------------------------
 echo ""
-echo "Boot verbosity:"
-echo "1) Quiet / splash (default)"
-echo "2) Verbose"
-read -p "Choice [1-2, default 1]: " BOOT_V
-case ${BOOT_V:-1} in
-    2) BOOT_EXTRA="" ;;
-    *) BOOT_EXTRA="quiet splash" ;;
-esac
-
-echo ""
 echo "Auto-resize rootfs on first boot?"
 echo "1) Yes (recommended)"
 echo "2) No"
@@ -83,7 +73,7 @@ AUTORESIZE=${RESIZE_CHOICE:-1}
 # -------------------------------------------------------
 # Step 4: Write /etc/kernel/cmdline + fstab
 # -------------------------------------------------------
-CMDLINE="root=UUID=${BUILD_UUID} rw rootwait console=tty0 console=ttyMSM0,115200n8 earlycon=qcom_geni,0x00A90000 ${BOOT_EXTRA}"
+CMDLINE="root=UUID=${BUILD_UUID} earlycon console=tty0 console=ttyMSM0,115200 init=/sbin/init ro loglevel=7"
 
 echo ">>> Writing /etc/kernel/cmdline..."
 sudo bash -c "echo '${CMDLINE}' > '${ROOTFS_DIR}/etc/kernel/cmdline'"

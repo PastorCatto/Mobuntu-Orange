@@ -6,7 +6,86 @@
 
 ---
 
-## RC13 (Current)
+## RC15 — "The Debos Update" (Current)
+
+**Build System Overhaul**
+- `2_kernel_prep.sh` and `3_rootfs_cooker.sh` retired — replaced by debos YAML recipe pipeline
+- debos handles debootstrap, apt, overlays, chroot scripts, and packing in a reproducible VM
+- `1_preflight.sh` now generates `run_build.sh` (debos invocation with all `-t` flags) instead of calling scripts directly
+- `run_build.sh` is inspectable and re-runnable without going through preflight again
+- `watchdog.sh` updated to wrap `run_build.sh` instead of scripts 2+3
+
+**Recipe Architecture**
+- `recipes/base.yaml` — debootstrap + apt + UI + user → `base-{release}.tar.gz` (cached)
+- `recipes/qcom.yaml` — included by SDM845 device recipes: Qcom packages, firmware, services, hooks
+- `recipes/l4t.yaml` — included by Switch device recipes: minimal L4T setup
+- `recipes/devices/{codename}.yaml` — per-device: unpack base → overlay → kernel → pack
+- `recipes/scripts/` — shell scripts called by debos `run:` actions
+- `recipes/overlays/` — files copied verbatim into rootfs (51-qcom.conf, qcom-firmware hook, beryllium kernel hooks)
+
+**Base Tarball Caching**
+- Base tarball built once per release, reused by all device recipes
+- Device builds skip debootstrap + apt entirely — 40-60% faster for multi-device builds
+- Stale check: base rebuilds if `base.yaml` is newer than the tarball
+
+**fakemachine Backend Detection**
+- Auto-detects KVM → UML → QEMU in that order
+- WSL2: select `none` for `--disable-fakemachine` (requires sudo, works correctly in WSL2)
+- `qemu-system-x86` needed for QEMU backend on x86-64 hosts
+
+**Boot Cmdline Fix (arkadin91)**
+- New: `root=UUID=... earlycon console=tty0 console=ttyMSM0,115200 init=/sbin/init ro loglevel=7`
+- `rw rootwait` → `ro`, `115200n8` → `115200`, `earlycon=qcom_geni,0x00A90000` → `earlycon`
+- `init=/sbin/init` added, `loglevel=7` replaces quiet/splash toggle
+- Boot verbosity prompt removed from `5_seal_rootfs.sh`
+
+**verify_build.sh**
+- Now unpacks device tarball to temp dir for inspection, cleans up after
+- Base cache status check added
+
+**Developer Masterkit**
+- Boot Chain section updated for debos pipeline
+- `run_build.sh` and `recipes/` added to file tree
+- Base tarball cache management section added
+- `FAKEMACHINE_BACKEND` shown in status bar
+
+---
+
+## RC14 — "The Quirks Update"
+
+**DEVICE_QUIRKS System**
+- `DEVICE_QUIRKS` string added to all device configs as source of truth for device-specific build behaviour
+- `has_quirk()` helper available on host and inside chroot
+- All Qualcomm-specific build steps gated behind `qcom_services` quirk
+- Quirk flags: `dtb_append`, `qcom_services`, `firmware_source_local`, `firmware_source_online`, `l4t_bootfiles`
+
+**Nintendo Switch Support**
+- Four new device configs: V1 (icosa/T210), V2 (hoag/T210B01), Lite (vali), OLED (aula)
+- New `BOOT_METHOD="l4t"` in `5_seal_rootfs.sh`: outputs kernel.lz4 + initrd.lz4 + DTB
+- `lz4` added to host dependencies
+- `KERNEL_REPO` placeholder — fill in switchroot L4T kernel .deb URL before building
+
+**Bug Fixes**
+- `xiaomi-beryllium-ebbg.conf` was copy-paste of Tianma — now correctly references EBBG DTB
+- Phosh: `squeekboard` install non-fatal, falls back to `phosh-osk-stub`
+- greetd `command` changed to full path `/usr/bin/phosh`
+- `greeter` user groups expanded to `video,render,input,audio`
+- `BOOT_PANEL_PICKER` gate — panel picker only shown when device requires it
+
+**Verified Fixes (RC10.2.2 backport)**
+- All `qemu-aarch64` → `qemu-aarch64-static` for Ubuntu 24.04 host compatibility
+- `LOCAL_FW_ARCHIVE` deduplicated in `3_rootfs_cooker.sh`
+
+**Developer Masterkit**
+- Boot Chain section added (first in menu)
+- `HIGHLIGHT_KEYS` — critical keys highlighted in `.conf` file previews
+- Device family shown in services section
+- New device wizard asks `qcom/l4t` and generates appropriate config
+- Verifier generator is quirk-aware
+
+---
+
+## RC13 (Current Stable)
 
 **Branding**
 - Project renamed from Mobuntu Orange to Mobuntu
@@ -20,56 +99,46 @@
 - `BUILD_COLOR` written to build.env alongside hostname
 
 **Panel Selection**
-- Panel (Tianma/EBBG) now selected in script 1 and saved to build.env as `BOOT_PANEL` and `BOOT_DTB_SELECTED`
+- Panel (Tianma/EBBG) selected in script 1, saved to build.env as `BOOT_PANEL` and `BOOT_DTB_SELECTED`
 - Script 5 reads from build.env instead of re-prompting
 
 **QEMU Path Fix (Ubuntu 26.04 host)**
-- `qemu-user-static` package renamed in 26.04 — replaced with `qemu-user-binfmt-hwe`
-- Static binary path changed from `/usr/bin/qemu-aarch64-static` to `/usr/bin/qemu-aarch64`
-- Scripts 3 and 4 updated accordingly
+- `qemu-user-static` renamed in 26.04 — replaced with `qemu-user-binfmt-hwe`
+- Static binary path updated in scripts 3 and 4
 
 **Kernel Version Picker**
-- Script 2 now lists all available kernel series from Mobian pool when no pin is set
-- Displays available series with suggested `KERNEL_VERSION_PIN` value for each
+- Script 2 lists all available kernel series from Mobian pool when no pin set
 - Auto-selects latest if no input given
-- All index fetches switched from curl to wget for WSL2 host compatibility
+- All index fetches switched from curl to wget for WSL2 compatibility
 
 **Audio Stack (Critical Fix)**
-- `hexagonrpcd` removed, then re-added with correct systemd ordering drop-ins
-- Root cause of ADSP 60s watchdog crash identified as service startup race
+- `hexagonrpcd` removed — confirmed cause of ADSP 60s watchdog crash on warm boot
 - `alsa-state` and `alsa-restore` masked — conflict with SDM845 audio subsystem
-- `51-qcom.conf` WirePlumber ALSA tuning config sourced from `firmware/{brand}-{codename}/` folder
+- `51-qcom.conf` WirePlumber ALSA tuning sourced from `firmware/{brand}-{codename}/`
 - pmaports beryllium device files added: `hexagonrpcd.confd`, `q6voiced.conf`, `81-libssc.rules`
-- Script 3 fetches pmaports files from upstream if not present locally, saves source URL to log
-- `hexagonrpcd` service ordering: `qrtr-ns` -> `rmtfs` -> `pd-mapper` -> `hexagonrpcd`
+- Script 3 fetches pmaports files from upstream if not present locally
 
 **qcom-firmware Initramfs Hook**
-- `qcom-firmware` initramfs hook sourced from `firmware/{brand}-{codename}/qcom-firmware`
-- Falls back to project root if device-specific file not found
-- Bakes ADSP/CDSP/GPU firmware directly into initramfs for early boot availability
-- Hook install inside chroot is conditional — skips cleanly if not staged
+- Sourced from `firmware/{brand}-{codename}/qcom-firmware`, falls back to project root
+- Bakes ADSP/CDSP/GPU firmware into initramfs for early boot availability
 
 **Service Ordering**
 - systemd drop-in configs generated for `pd-mapper`, `rmtfs`, `hexagonrpcd`
-- All drop-ins use `printf` instead of heredocs to avoid CHROOT_EOF conflicts
+- All drop-ins use `printf` to avoid CHROOT_EOF conflicts
 
 **Ubuntu Desktop Minimal Easter Egg**
-- When Ubuntu Desktop Minimal is selected, GNOME accent color is set to match `BUILD_COLOR`
+- GNOME accent color set to match `BUILD_COLOR` when Ubuntu Desktop Minimal selected
 - Unmounted volumes hidden in Nautilus via dconf override
-- Written to `/etc/dconf/db/local.d/01-mobuntu-theme`
 
 **Squeekboard**
-- `phosh-osk-stub` and `lomiri-osk-stub` replaced with `squeekboard` (available in Ubuntu repos)
-- Phosh no longer uses `-t staging` flag — pulled directly from Ubuntu repos
+- Replaced `phosh-osk-stub` and `lomiri-osk-stub` with `squeekboard`
 
 **Display Manager Fix**
-- Stale `display-manager.service` symlink removed before DM enable to prevent conflicts
+- Stale `display-manager.service` symlink removed before DM enable
 
 **Auto-resize on First Boot**
-- Script 5 prompts to enable first-boot auto-resize alongside verbosity selection
-- Installs `mobuntu-resize.service` — one-shot, runs `resize2fs` using `DEVICE_IMAGE_LABEL`
-- Creates `/etc/mobuntu-resize-pending` flag, deleted after successful resize
-- Device reboots automatically after resize completes
+- `mobuntu-resize.service` installed — one-shot `resize2fs` on first boot
+- `/etc/mobuntu-resize-pending` flag removed after successful resize, device reboots
 
 **Watchdog / Auto Build (Partially Implemented)**
 - `watchdog.sh` added — runs scripts 2 -> 3 -> verify -> 5 unattended
@@ -81,10 +150,8 @@
 - Timestamped log written per run
 
 **Build Verification**
-- `verify_build.sh` added — standalone cross-check of build.env vs rootfs
-- Checks: build.env completeness, device config, hostname, packages, services, ordering drop-ins, WirePlumber config, kernel, firmware, ALSA masking, initramfs hook, autoresize service, build color
-- Package checks use direct dpkg status file reads — no chroot required, works from x86 host
-- Hidden ZWJ signal on pass for watchdog integration
+- `verify_build.sh` added — cross-checks build.env vs rootfs
+- ZWJ signal on pass for watchdog integration
 
 **Developer Masterkit**
 - `mobuntu-developer-masterkit.py` added — Python curses TUI
@@ -115,17 +182,14 @@
 ## RC12
 
 **Audio Investigation**
-- Ran diagnostic script against arkadin91's reference image (Ubuntu 26.04, April 9 build)
-- Confirmed identical kernel (6.18.20-1), same firmware — difference is userspace only
-- Key finding: reference image has no `hexagonrpcd` — audio works via WirePlumber ALSA tuning alone
-- `51-qcom.conf` sourced from arkadin91's image: S16LE, 48000Hz, period-size 4096, period-num 6, headroom 512
-- `hexagonrpcd` confirmed as cause of ADSP 60s watchdog crash on warm boot — removed
+- Ran diagnostic against arkadin91 reference image (Ubuntu 26.04, April 9 build)
+- Confirmed: no `hexagonrpcd` in reference — audio works via WirePlumber ALSA tuning alone
+- `51-qcom.conf` sourced from arkadin91: S16LE, 48000Hz, period-size 4096, period-num 6, headroom 512
+- `hexagonrpcd` confirmed as cause of ADSP 60s watchdog crash — removed
 - `alsa-state` and `alsa-restore` identified as conflicting services
-- ADSP fastrpc missing `memory-region` in DTB confirmed via `/sys/firmware/fdt` inspection — cosmetic warning only, not root cause
 
 **Kernel Unpinning**
-- `KERNEL_VERSION_PIN` can now be commented out in device config
-- Script 2 falls back to latest available series when pin is absent
+- `KERNEL_VERSION_PIN` can now be commented out — falls back to latest available
 
 **Ubuntu 26.04 Host Support**
 - QEMU package and binary path updated for 26.04 host environment
@@ -159,8 +223,6 @@
 
 **UI Package Pinning**
 - All UI installs use `-t` to pin to correct apt source
-- Phosh/phrog/greetd pinned to `-t staging`
-- Ubuntu UI packages pinned to `-t "$UBUNTU_RELEASE"`
 
 **Chroot Script Rewrite**
 - Split two-stage heredoc: `INJECT_EOF` writes host variables into chroot script header, single-quoted `CHROOT_EOF` appends all build logic
