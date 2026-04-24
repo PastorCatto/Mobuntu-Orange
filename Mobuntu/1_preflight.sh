@@ -73,8 +73,8 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     dosfstools uuid-runtime \
     android-sdk-libsparse-utils \
     lz4 qemu-system-aarch64 \
-    qemu-user-static binfmt-support \
-    golang libglib2.0-dev libostree-dev
+    qemu-user-static qemu-system-x86 binfmt-support \
+    golang libglib2.0-dev libostree-dev busybox-static
 
 # Install debos if not present
 if ! command -v debos &>/dev/null; then
