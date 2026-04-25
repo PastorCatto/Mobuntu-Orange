@@ -72,7 +72,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     xz-utils gzip zip ca-certificates rsync \
     dosfstools uuid-runtime \
     android-sdk-libsparse-utils \
-    lz4 qemu-system-aarch64 \
+    lz4 qemu-system-aarch64 systemd-container \
     qemu-user-static qemu-system-x86 binfmt-support \
     golang libglib2.0-dev libostree-dev busybox-static
 
