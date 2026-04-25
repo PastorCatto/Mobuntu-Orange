@@ -1,6 +1,7 @@
 # Mobuntu RC15 — base.yaml
-# All template vars expanded by debos before execution.
-# No env var inheritance through systemd-nspawn needed.
+# Ubuntu repos ONLY — Mobian repo is added in qcom.yaml for SDM845 devices.
+# Switch devices never get the Mobian repo.
+# This ensures UI packages resolve cleanly against the Ubuntu release.
 #
 # Required -t flags:
 #   UBUNTU_RELEASE, USERNAME, PASSWORD, UI_NAME, UI_DM, BUILD_COLOR, EXTRA_PKG
@@ -21,7 +22,7 @@ actions:
     mirror: http://ports.ubuntu.com/ubuntu-ports
 
   # -------------------------------------------------------
-  # 2. Ubuntu + Mobian apt sources
+  # 2. Ubuntu apt sources only — no Mobian here
   # -------------------------------------------------------
   - action: run
     chroot: true
@@ -30,18 +31,17 @@ actions:
       printf "deb http://ports.ubuntu.com/ubuntu-ports/ {{ .UBUNTU_RELEASE }}-updates main restricted universe multiverse\n" >> /etc/apt/sources.list
       printf "deb http://ports.ubuntu.com/ubuntu-ports/ {{ .UBUNTU_RELEASE }}-security main restricted universe multiverse\n" >> /etc/apt/sources.list
       apt-get update
-      apt-get install -y curl ca-certificates gnupg
-      curl -fsSL https://repo.mobian.org/mobian.gpg -o /etc/apt/trusted.gpg.d/mobian.gpg
-      printf "deb http://repo.mobian.org/ staging main non-free-firmware\n" > /etc/apt/sources.list.d/mobian.list
-      apt-get update
       apt-get upgrade -y
 
   # -------------------------------------------------------
-  # 3. Base system packages
+  # 3. Base system packages (Ubuntu only)
   # -------------------------------------------------------
   - action: apt
     update: false
     packages:
+      - curl
+      - ca-certificates
+      - gnupg
       - initramfs-tools
       - sudo
       - network-manager
@@ -56,8 +56,7 @@ actions:
       - tzdata
 
   # -------------------------------------------------------
-  # 4. UI + display manager
-  # All cases inlined — template var expanded before chroot entry
+  # 4. UI + display manager (Ubuntu repos — clean resolve)
   # -------------------------------------------------------
   - action: run
     chroot: true
@@ -66,7 +65,6 @@ actions:
       UI_NAME="{{ .UI_NAME }}"
       UI_DM="{{ .UI_DM }}"
       BUILD_COLOR="{{ .BUILD_COLOR }}"
-      UBUNTU_RELEASE="{{ .UBUNTU_RELEASE }}"
       echo ">>> Installing UI: ${UI_NAME} (DM: ${UI_DM})"
       case "${UI_NAME}" in
       phosh)
