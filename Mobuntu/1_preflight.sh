@@ -351,6 +351,11 @@ SCRIPT_DIR="${SCRIPT_DIR}"
 BASE_TARBALL="${BASE_TARBALL}"
 DEVICE_TARBALL="${DEVICE_TARBALL}"
 
+# debos resolves recipe-relative paths against $(pwd) when using the none
+# backend. Always cd into the repo root so overlays/scripts/etc resolve correctly
+# regardless of where the user invoked this script from.
+cd "\${SCRIPT_DIR}"
+
 echo "======================================================="
 echo "   Mobuntu RC15 — Build: ${DEVICE_NAME}"
 echo "   Release: ${UBUNTU_RELEASE}  Backend: ${FAKEMACHINE_BACKEND}"
