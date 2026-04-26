@@ -38,7 +38,18 @@ actions:
 {{ end }}
 
   # -------------------------------------------------------
-  # 4. Qualcomm packages, services, hooks
+  # 4. fastrpc daemons + DSP binaries
+  # -------------------------------------------------------
+  - action: run
+    chroot: false
+    label: Install fastrpc and DSP firmware
+    script: scripts/install-fastrpc-device.sh
+    environment:
+      DEVICE_BRAND: "{{ .DEVICE_BRAND }}"
+      DEVICE_CODENAME: "{{ .DEVICE_CODENAME }}"
+
+  # -------------------------------------------------------
+  # 5. Qualcomm packages, services, hooks
   # -------------------------------------------------------
   - action: run
     chroot: true
