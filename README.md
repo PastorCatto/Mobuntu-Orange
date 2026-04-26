@@ -213,8 +213,8 @@ Written to `/etc/kernel/cmdline` by `5_seal_rootfs.sh`. The active DTB is stored
 | :--- | :--- | :--- |
 | 24.04 LTS | noble | ✅ Supported |
 | 24.10 | oracular | ✅ Supported |
-| 26.04 beta | resolute | ✅ Recommended — default |
-| 26.04 LTS | quill | 🔒 Disabled until release |
+| 26.04 LTS | resolute | ✅ Recommended — default |
+
 
 ---
 
