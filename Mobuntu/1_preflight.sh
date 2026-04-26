@@ -74,6 +74,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     android-sdk-libsparse-utils \
     lz4 qemu-system-aarch64 \
     qemu-user-static binfmt-support \
+    systemd-container \
     golang libglib2.0-dev libostree-dev
 
 # Install debos if not present
