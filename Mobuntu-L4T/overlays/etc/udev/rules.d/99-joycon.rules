@@ -1,0 +1,20 @@
+# Mobuntu-L4T — Joy-Con udev rules
+# File: overlays/etc/udev/rules.d/99-joycon.rules
+# Grants input group access to Joy-Con devices
+# Calibration data sourced from Hekate dump — see docs/HEKATE_CALIBRATION.md
+
+# Joy-Con (L)
+KERNEL=="hidraw*", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="2006", \
+    MODE="0660", GROUP="input", TAG+="uaccess"
+
+# Joy-Con (R)
+KERNEL=="hidraw*", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="2007", \
+    MODE="0660", GROUP="input", TAG+="uaccess"
+
+# Pro Controller
+KERNEL=="hidraw*", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="2009", \
+    MODE="0660", GROUP="input", TAG+="uaccess"
+
+# Joy-Con charging grip
+KERNEL=="hidraw*", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="200e", \
+    MODE="0660", GROUP="input", TAG+="uaccess"

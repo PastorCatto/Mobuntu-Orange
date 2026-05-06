@@ -1,0 +1,8 @@
+build/
+output/
+*.7z
+*.img
+*.deb
+__pycache__/
+*.pyc
+.devkit/

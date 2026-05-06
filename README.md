@@ -11,12 +11,12 @@ for the SDM845 target. L4T and PS4 variants are standalone pipelines.
 
 ## Variants
 
-| Variant | Target | Output | Status |
-|---------|--------|--------|--------|
-| `Mobuntu/` | SDM845 phones (Poco F1, OnePlus 6/6T) | flashable `.img` | Active |
-| `Mobuntu-L4T/` | Nintendo Switch (Tegra X1) | hekate `.7z` | Scaffold |
-| `Mobuntu-PS4/` | PlayStation 4 (FW 12.52, CUH-12xx) | dd-able `.img` | Scaffold |
-| `Mobuntu-PDK/` | Ubuntu Phone PDK | TBD | Planned |
+| Variant | Target | Output | Codename | Status |
+|---------|--------|--------|----------|--------|
+| `Mobuntu/` | SDM845 phones (Poco F1, OnePlus 6/6T) | flashable `.img` | — | Active |
+| `Mobuntu-L4T/` | Nintendo Switch (Tegra X1) | hekate `.7z` | Happy Mask Salesman → Tatl/Majora | Scaffold |
+| `Mobuntu-PS4/` | PlayStation 4 (jailbroken, all boards) | rootfs tarball | Spider-Man | Scaffold |
+| `Mobuntu-PDK/` | Ubuntu Phone PDK | TBD | — | Planned |
 
 Releases are color-coded. See CHANGELOG.md for per-release details.
 
@@ -109,29 +109,35 @@ Mobuntu/
 ---
 
 ## Mobuntu-L4T — Nintendo Switch
+**Codename:** Happy Mask Salesman (dev) → Tatl / Majora (release)
 
 See `Mobuntu-L4T/README.md` for full documentation.
 
+Thin wrapper on upstream Switchroot L4T scripts. UIs: Phosh, Plasma Mobile, KDE, LXDE, MATE (no GNOME).
+Joy-Con calibration via Hekate. Kernel/initramfs from upstream Switchroot — not built here.
+
 ```bash
-cd Mobuntu-L4T && sudo ./build.sh
+sudo ./Mobuntu-L4T/build.sh -d switch
 ```
 
-Output: `output/mobuntu-l4t-noble-dev.7z` — extract to SD FAT32, then hekate `Flash Linux`.
-Requires hekate >= 6.0.6.
+Output: hekate-installable `.7z`. Requires hekate >= 6.0.6.
 
 ---
 
 ## Mobuntu-PS4 — PlayStation 4
+**Codename:** Spider-Man
 
 See `Mobuntu-PS4/README.md` for full documentation.
 
-```bash
-cd Mobuntu-PS4 && sudo ./build.sh
-```
+Debian-based rootfs builder for jailbroken PS4. Kernel (strawberry 6.18.21) referenced upstream.
+initramfs bundled (3 variants). Mesa 25 built via Docker. UIs: GNUstep, LXDE, LXQT.
 
-Output: `output/mobuntu-ps4-noble-dev.img` — dd directly to USB drive.
-Targets FW 12.52 (GoldHen), CUH-12xx hardware.
+The `-p` flag selects both initramfs variant and boot file placement:
 
 ```bash
-sudo dd if=output/mobuntu-ps4-noble-dev.img of=/dev/sdX bs=4M status=progress conv=fsync
+sudo ./Mobuntu-PS4/build.sh -d ps4 -p external   # USB boot (any board)
+sudo ./Mobuntu-PS4/build.sh -d ps4 -p aeolia      # Internal HDD, fat PS4
+sudo ./Mobuntu-PS4/build.sh -d ps4 -p belize      # Internal HDD, PS4 Slim
 ```
+
+Output: `output/boot-files/` + `output/mobuntu-ps4-*.tar.xz`

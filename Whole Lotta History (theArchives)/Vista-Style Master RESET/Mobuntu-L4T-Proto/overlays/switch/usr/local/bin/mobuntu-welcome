@@ -1,0 +1,11 @@
+#!/bin/bash
+# Mobuntu-L4T first-boot welcome.
+# Stub — wire into a oneshot systemd service later.
+cat <<'EOF'
+========================================================
+  Mobuntu L4T (Switch / Tegra X1)
+  Default credentials: mobuntu / mobuntu  (CHANGE NOW)
+  Hekate >= 6.0.6 required for this release.
+  Discord: https://discord.gg/RZV2HveyBg
+========================================================
+EOF

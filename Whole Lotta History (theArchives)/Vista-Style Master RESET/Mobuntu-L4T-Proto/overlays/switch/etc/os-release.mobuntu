@@ -1,0 +1,6 @@
+# Mobuntu-L4T issue
+PRETTY_NAME="Mobuntu L4T (development)"
+NAME="Mobuntu L4T"
+ID=mobuntu-l4t
+ID_LIKE=ubuntu
+HOME_URL="https://discord.gg/RZV2HveyBg"

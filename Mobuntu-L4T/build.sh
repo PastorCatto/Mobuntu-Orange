@@ -1,68 +1,119 @@
 #!/usr/bin/env bash
-# =============================================================================
-# Mobuntu-L4T build orchestrator
-# =============================================================================
-# Runs the 5-script pipeline. Stages can be skipped via STAGES env var:
-#   STAGES="01 02 03" ./build.sh    # only run bootstrap, fetch, customize
-#   STAGES="04 05" ./build.sh       # only repackage from existing rootfs
+# Mobuntu-L4T build.sh
+# Codename: Happy Mask Salesman
+# Version: 0.1.0
 #
-# Pattern mirrors the SDM845 pipeline so the devkit can drive both.
-# =============================================================================
+# Thin wrapper around upstream Switchroot L4T build scripts.
+# Mobuntu-L4T does NOT fork upstream — it layers overlays on top.
+#
+# Usage:
+#   sudo ./build.sh -d switch [-u <ui>] [-f <flavor>] [-h]
+#
+#   -d  Device codename (currently: switch)
+#   -u  UI selection (phosh|plasma-mobile|kde|lxde|mate) — default: from device.conf
+#   -f  L4T flavor (kde-noble|gnome-noble|unity-noble) — default: from device.conf
+#   -h  Help
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+UPSTREAM_DIR="${SCRIPT_DIR}/upstream/l4t-image-buildscripts"
+OVERLAYS_DIR="${SCRIPT_DIR}/overlays"
+SCRIPTS_DIR="${SCRIPT_DIR}/scripts"
+VERSION="0.1.0"
+CODENAME="Happy Mask Salesman"
 
-# shellcheck source=build.env
-source "${SCRIPT_DIR}/build.env"
+# ── Colours ──────────────────────────────────────────────────────────────────
+red()   { echo -e "\e[91m$*\e[0m" >&2; }
+cyan()  { echo -e "\e[96m$*\e[0m" >&2; }
+green() { echo -e "\e[92m$*\e[0m" >&2; }
 
-# ---- Stage selection --------------------------------------------------------
-ALL_STAGES="01 02 03 04 05"
-STAGES="${STAGES:-$ALL_STAGES}"
+error() { red "ERROR: $*"; exit 1; }
+status() { cyan "$*"; }
+success() { green "$*"; }
 
-# ---- Logging ----------------------------------------------------------------
-LOG_DIR="${BUILD_DIR}/logs"
-mkdir -p "$LOG_DIR"
-BUILD_LOG="${LOG_DIR}/build-$(date +%Y%m%d-%H%M%S).log"
-exec > >(tee -a "$BUILD_LOG") 2>&1
+# ── Root check ────────────────────────────────────────────────────────────────
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Re-running as root..."
+    exec sudo -E bash "$0" "$@"
+fi
 
-log()   { printf '[BUILD %s] %s\n' "$(date +%H:%M:%S)" "$*"; }
-fatal() { printf '[BUILD ERROR] %s\n' "$*" >&2; exit 1; }
-warn()  { printf '[BUILD WARN] %s\n' "$*" >&2; }
+# ── Argument parsing ──────────────────────────────────────────────────────────
+DEVICE=""
+UI_OVERRIDE=""
+FLAVOR_OVERRIDE=""
 
-# ---- Preflight --------------------------------------------------------------
-[[ $EUID -eq 0 ]] || fatal "This script must run as root (debootstrap + chroot needed). Try: sudo ./build.sh"
-
-# Detect host Ubuntu version for QEMU package selection.
-HOST_UBUNTU_VERSION="$(lsb_release -rs 2>/dev/null || echo unknown)"
-case "$HOST_UBUNTU_VERSION" in
-    24.04) log "Host: Ubuntu 24.04 (supported)";;
-    26.04) warn "Host: Ubuntu 26.04 — known QEMU segfault regression with arm64 chroots. Proceed at your own risk.";;
-    *)     warn "Host: Ubuntu ${HOST_UBUNTU_VERSION} (untested for L4T builds — recommended: 24.04)";;
-esac
-
-# ---- Stage runner -----------------------------------------------------------
-run_stage() {
-    local num="$1" script
-    script=$(find "${SCRIPT_DIR}/scripts" -maxdepth 1 -name "${num}-*.sh" | head -n1)
-    [[ -n "$script" ]] || { warn "No stage script found for ${num}, skipping"; return 0; }
-    log "=== Stage ${num}: $(basename "$script") ==="
-    if ! bash "$script"; then
-        fatal "Stage ${num} failed. Log: $BUILD_LOG"
-    fi
-    log "=== Stage ${num} complete ==="
-}
-
-log "Mobuntu-L4T build starting"
-log "Suite=${UBUNTU_SUITE} Flavor=${FLAVOR} Arch=${ARCH} L4T=${L4T_RELEASE}"
-log "Stages: ${STAGES}"
-log "Output: ${OUTPUT_DIR}/${OUTPUT_7Z}"
-
-mkdir -p "$BUILD_DIR" "$ROOTFS_DIR" "$DEBS_DIR" "$IMAGE_DIR" "$OUTPUT_DIR"
-
-for stage in $STAGES; do
-    run_stage "$stage"
+while getopts "d:u:f:h" opt; do
+    case $opt in
+        d) DEVICE="$OPTARG" ;;
+        u) UI_OVERRIDE="$OPTARG" ;;
+        f) FLAVOR_OVERRIDE="$OPTARG" ;;
+        h)
+            grep '^#' "$0" | grep -v '#!/' | sed 's/^# \?//'
+            exit 0
+            ;;
+        *) error "Unknown option. Use -h for help." ;;
+    esac
 done
 
-log "Build complete. Artifact: ${OUTPUT_DIR}/${OUTPUT_7Z}"
-log "Log saved: ${BUILD_LOG}"
+[ -z "$DEVICE" ] && error "Device required. Use -d <codename> (e.g. -d switch)"
+
+# ── Load device config ────────────────────────────────────────────────────────
+DEVICE_CONF="${SCRIPT_DIR}/devices/${DEVICE}/device.conf"
+[ -f "$DEVICE_CONF" ] || error "No device.conf at ${DEVICE_CONF}"
+# shellcheck source=/dev/null
+source "$DEVICE_CONF"
+
+DEVICE_UI="${UI_OVERRIDE:-${DEVICE_UI:-phosh}}"
+L4T_FLAVOR="${FLAVOR_OVERRIDE:-${L4T_FLAVOR:-kde-noble}}"
+
+# ── Validate upstream ─────────────────────────────────────────────────────────
+[ -f "${UPSTREAM_DIR}/scripts/apply.sh" ] || \
+    error "Upstream L4T scripts not found at ${UPSTREAM_DIR}. Run: git submodule update --init"
+
+# ── Validate UI choice ────────────────────────────────────────────────────────
+VALID_UIS="phosh plasma-mobile kde lxde mate"
+echo "$VALID_UIS" | grep -qw "$DEVICE_UI" || \
+    error "Invalid UI '${DEVICE_UI}'. Valid options: ${VALID_UIS}"
+
+[ "$DEVICE_UI" = "gnome" ] && \
+    error "GNOME is excluded from Mobuntu-L4T due to known L4T regressions."
+
+# ── Banner ────────────────────────────────────────────────────────────────────
+echo ""
+echo "╔══════════════════════════════════════════════════════╗"
+echo "║         Mobuntu-L4T Build System v${VERSION}             ║"
+echo "║         Codename: ${CODENAME}          ║"
+echo "╚══════════════════════════════════════════════════════╝"
+echo ""
+status "  Device   : ${DEVICE_MODEL:-Switch} (${DEVICE})"
+status "  UI       : ${DEVICE_UI}"
+status "  Flavor   : ${L4T_FLAVOR}"
+status "  Upstream : ${UPSTREAM_DIR}"
+echo ""
+
+# ── Stage 1: Upstream L4T build ───────────────────────────────────────────────
+status "[ 1/3 ] Running upstream Switchroot L4T build (${L4T_FLAVOR})..."
+bash "${UPSTREAM_DIR}/scripts/apply.sh" "${L4T_FLAVOR}" || \
+    error "Upstream apply.sh failed."
+
+# ── Stage 2: Apply Mobuntu overlays ──────────────────────────────────────────
+status "[ 2/3 ] Applying Mobuntu-L4T overlays (UI: ${DEVICE_UI})..."
+bash "${SCRIPTS_DIR}/apply-overlays.sh" \
+    --rootfs "${UPSTREAM_DIR}/output/rootfs" \
+    --overlays "${OVERLAYS_DIR}" \
+    --ui "${DEVICE_UI}" || \
+    error "Overlay application failed."
+
+# ── Stage 3: Repackage ────────────────────────────────────────────────────────
+status "[ 3/3 ] Repackaging for Hekate..."
+bash "${UPSTREAM_DIR}/scripts/create_image.sh" "${L4T_FLAVOR}" || \
+    error "Image creation failed."
+
+echo ""
+success "╔══════════════════════════════════════════════════════╗"
+success "║         Mobuntu-L4T build complete!                  ║"
+success "║  Output: upstream/l4t-image-buildscripts/output/    ║"
+success "║  See docs/HEKATE_CALIBRATION.md before booting.     ║"
+success "╚══════════════════════════════════════════════════════╝"
+echo ""

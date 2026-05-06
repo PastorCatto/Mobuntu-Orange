@@ -1,0 +1,13 @@
+[Unit]
+Description=Mobuntu-L4T First Boot UI Selection
+After=local-fs.target
+Before=display-manager.service
+ConditionPathExists=!/var/lib/mobuntu/.ui-configured
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mobuntu-ui-select.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

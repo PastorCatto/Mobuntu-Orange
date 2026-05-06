@@ -1,0 +1,5 @@
+output
+files/rootfs/jammy/*
+files/rootfs/noble/*
+!/files/rootfs/jammy/.gitkeep
+!/files/rootfs/noble/.gitkeep
