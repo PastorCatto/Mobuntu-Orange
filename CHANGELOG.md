@@ -2,6 +2,48 @@
 
 ---
 
+## May 6, 2026 — Spider-Man Scaffold + L4T Architecture Pivot + devkit Fix
+
+### devkit.py — Build Argument Fix
+build.sh uses `getopts -d <codename>` but devkit was passing DEVICE only as
+an env var. Fixed via new `_build_cmd()` helper that injects `-d <codename>`
+as a CLI arg. Both TUI and CLI `--build` paths updated.
+
+### Mobuntu-PS4 (Spider-Man) — Initial Scaffold [0.1.0]
+Full scaffold delivered. Key decisions:
+
+| Decision | Choice | Reason |
+|----------|--------|--------|
+| Base distro | Debian Bookworm/Trixie | Mesa 25 available; no Ubuntu overhead |
+| Kernel | strawberry 6.18.21 (upstream ref) | Stable; 7.0 has boot issues |
+| initramfs | Bundled 3 variants | Original source dead; preserved with attribution |
+| Mesa | Docker build (FalsePhilosopher) | Reproducible PS4-patched build |
+| Boot flag | `-p external|aeolia|belize` | Single flag drives initramfs + boot file placement |
+| UIs | GNUstep (primary), LXDE, LXQT | Sub-600MB idle; X11 + Steam capable |
+
+**Platform variants (-p flag):**
+- `external` — USB/FAT32 boot, any board, initramfs/external/
+- `aeolia` — internal HDD, fat PS4, initramfs/internal-aeolia/
+- `belize` — internal HDD, PS4 Slim/newer, initramfs/internal-belize/
+
+**Files added:** build.sh, devices/ps4/device.conf, scripts/build-mesa.sh,
+scripts/customize-rootfs.sh, scripts/stage-boot.sh, 3x initramfs variants,
+upstream/UPSTREAM_SOURCES.md, docs/INSTALL.md, audit/CHANGELOG.md
+
+**Upstream references:**
+- Kernel: https://github.com/rmuxnet/ps4-linux-12xx (6.18.21 = strawberry)
+- Mesa: https://github.com/FalsePhilosopher/mesa-docker-ps4
+- initramfs source: https://github.com/DionKill/ps4-linux-tutorial (archived)
+- Guide: https://dionkill.github.io/ps4-linux-tutorial/
+
+### Mobuntu-L4T (Happy Mask Salesman) — Architecture Pivot + Initial Scaffold [0.1.0]
+5-stage standalone pipeline replaced with thin wrapper on upstream Switchroot
+l4t-image-buildscripts. Codename assigned: Happy Mask Salesman (dev), Tatl/Majora (release).
+UIs: Phosh, Plasma Mobile, KDE, LXDE, MATE. GNOME excluded (known L4T regressions).
+Joy-Con via joycond + Hekate calibration dump. Full audit trail in Mobuntu-L4T/audit/.
+
+
+
 ## May 2, 2026 — Multi-Platform Expansion
 
 ### Project Rename

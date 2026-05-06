@@ -313,6 +313,7 @@ Run debos with `--scratchsize=10G --disable-fakemachine` for WSL2 compatibility.
 ---
 
 ## Mobuntu-L4T — Nintendo Switch
+**Codename:** Happy Mask Salesman
 
 ### Overview
 
@@ -406,104 +407,124 @@ rootlabel_retries=100  # USB boot: retry rootdev 100 x 200ms = 20s
 ---
 
 ## Mobuntu-PS4 — PlayStation 4
+**Codename:** Spider-Man
 
 ### Overview
 
-Targets PS4 on firmware 12.52 (GoldHen jailbreak). Focus hardware: CUH-12xx
-(Belize/Aeolia southbridge) — the model family for which `feeRnt/ps4-linux-12xx`
-has active WiFi/BT support (Marvell 8897).
+Targets jailbroken PS4 consoles (all board variants). Builds a minimal Debian
+rootfs, bundles the correct initramfs, and stages boot files based on the `-p`
+platform flag. Kernel NOT built here — place upstream bzImage before building.
 
-Output is a raw MBR disk image — `dd` it directly to a USB drive. No special
-packaging tool required.
+**Build host:** Ubuntu 24.04 x86-64. No QEMU — host and PS4 are both amd64.
+**Base:** Debian Bookworm or Trixie (Trixie recommended — Mesa 25 available natively).
+**Target:** Sub-600MB RAM idle. X11 + Steam capable.
 
-**Build host: any Ubuntu 24.04 x86-64. No QEMU — host and target are both amd64.**
+### build.sh Flags
 
-### build.env Key Variables
+```bash
+sudo ./build.sh -d ps4 -p <variant> [-u <ui>] [-b <suite>]
+```
+
+| Flag | Description | Options | Default |
+|------|-------------|---------|---------|
+| `-d` | Device codename | `ps4` | required |
+| `-p` | Platform/boot variant | `external` `aeolia` `belize` | required |
+| `-u` | UI selection | `gnustep` `lxde` `lxqt` | from device.conf |
+| `-b` | Debian suite | `bookworm` `trixie` | from device.conf |
+
+### Platform Variants (-p)
+
+The `-p` flag drives both initramfs selection and boot file drop location:
+
+| `-p` | Board | initramfs used | Boot file destination |
+|------|-------|----------------|-----------------------|
+| `external` | Any | `initramfs/external/` | FAT32 USB root |
+| `aeolia` | Fat PS4 (older) | `initramfs/internal-aeolia/` | `/data/linux/boot/` |
+| `belize` | PS4 Slim/newer | `initramfs/internal-belize/` | `/data/linux/boot/` |
+
+### device.conf Key Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `UBUNTU_SUITE` | `noble` | Ubuntu suite |
-| `ARCH` | `amd64` | Target architecture |
-| `KERNEL_MODE` | `prebuilt` | `prebuilt` (GitHub release) or `source` (compile) |
-| `KERNEL_REPO` | `feeRnt/ps4-linux-12xx` | GitHub repo for prebuilt fetch |
-| `KERNEL_TAG` | `latest` | Release tag (`latest` resolves via GitHub API) |
-| `BOOT_PART_SIZE_MIB` | `256` | FAT32 boot partition size |
-| `ROOTFS_SIZE_MIB` | `8192` | ext4 rootfs partition size |
-| `PS4_CMDLINE` | (see below) | Kernel cmdline passed to kexec payload |
+| `DEBIAN_SUITE` | `trixie` | Debian suite |
+| `DEVICE_UI` | `gnustep` | UI installed into rootfs |
+| `PRESEED_USERNAME` | `` | Optional — blank = default user `mobuntu` |
+| `PRESEED_HOSTNAME` | `mobuntu-ps4` | Hostname |
+| `KERNEL_CODENAME` | `strawberry` | Reference codename |
+| `KERNEL_VERSION` | `6.18.21` | Reference version |
 
-Default kernel cmdline:
-```
-panic=0 clocksource=tsc consoleblank=0 net.ifnames=0 radeon.dpm=0 amdgpu.dpm=0
-drm.debug=0 console=uart8250,mmio32,0xd0340000 console=ttyS0,115200n8
-console=tty0 drm.edid_firmware=edid/1920x1080.bin
-```
-
-### Pipeline Stages
-
-| Stage | Script | Purpose |
-|------:|--------|---------|
-| 01 | `bootstrap-rootfs.sh` | Native amd64 debootstrap — no QEMU |
-| 02 | `pull-kernel.sh` | Fetch prebuilt bzImage from feeRnt releases, or build from source |
-| 03 | `customize-rootfs.sh` | chroot: packages, GPU/WiFi/BT config, overlays, user |
-| 04 | `make-rawimage.sh` | Raw ext4 image via `mke2fs -d` |
-| 05 | `package-output.sh` | Assemble MBR disk image: FAT32 (boot) + ext4 (rootfs) |
-
-### Kernel Pull Modes
-
-**Prebuilt (default, KERNEL_MODE=prebuilt):**
-Stage 02 hits the GitHub API to find the specified release tag (or `latest`),
-downloads `bzImage` and `initramfs.cpio.gz` from the release assets. No
-compiler toolchain required. Fast.
-
-**Source (KERNEL_MODE=source):**
-Clones `feeRnt/ps4-linux-12xx` and builds natively. Requires full kernel
-toolchain (`build-essential`, `flex`, `bison`, `libssl-dev`, etc.). Takes
-30-60 minutes. Place a custom `.config` at `kernel/ps4_defconfig` to override
-the repo's default.
-
-### USB Disk Layout
+### Build Pipeline
 
 ```
-/dev/sdX
-├── p1: FAT32 (256 MiB)
-│   ├── bzImage
-│   ├── initramfs.cpio.gz
-│   └── cmdline.txt         (reference only — read by kexec payload config)
-└── p2: ext4  (8 GiB, label: MOBU-PS4)
-    └── Ubuntu Noble rootfs
+1. Debootstrap — minimal Debian amd64 rootfs (no QEMU)
+2. Mesa build  — PS4-patched Mesa 25 via Docker (or pre-built debs)
+3. Customize   — UI packages, LightDM, user setup, PS4 bootargs reference
+4. Package     — rootfs tarball (xz compressed, /var/cache excluded)
+5. Stage boot  — bzImage + initramfs + bootargs.txt → output/boot-files/
+```
+
+### Mesa 25
+
+Built via `FalsePhilosopher/mesa-docker-ps4` Docker container. First build
+takes significant time. Resulting debs are cached at `upstream/mesa-debs/`
+for future builds (skips Docker rebuild).
+
+Pre-built Debian debs can be dropped at `upstream/mesa-debs/*.deb` to skip
+the Docker build entirely. Source: triki1's Trixie release (ps4linux.com forums).
+
+### UI Options
+
+| UI | Notes |
+|----|-------|
+| `gnustep` | Primary — minimal overhead, X11-native |
+| `lxde` | Lightweight GTK desktop |
+| `lxqt` | Lightweight Qt desktop |
+
+Steam is installed on all variants.
+
+### USB Disk Layout (external boot)
+
+```
+USB drive
+├── p1: FAT32
+│   ├── bzImage              ← from output/boot-files/
+│   ├── initramfs.cpio.gz    ← from output/boot-files/
+│   └── bootargs.txt         ← from output/boot-files/
+└── p2: ext4  (label: MOBU-PS4)
+    └── <extract rootfs tarball here>
 ```
 
 ### Boot Flow
 
-1. Jailbreak PS4 with GoldHen (supports FW 12.52)
+1. Jailbreak PS4 with GoldHen
 2. Launch Linux kexec payload from homebrew launcher
-3. Payload reads `bzImage` + `initramfs.cpio.gz` from USB FAT32 (p1)
-4. kexec into kernel; rootfs mounts from USB ext4 (p2, found by label `MOBU-PS4`)
-5. Login: `mobuntu` / `mobuntu` — change on first boot
+3. Payload reads `bzImage` + `initramfs.cpio.gz` from FAT32
+4. kexec into kernel; rootfs mounts from ext4 (label: MOBU-PS4)
+5. Login: `mobuntu` / `mobuntu` — forced password change on first login
 
-### Write to USB
-
-```bash
-# Verify device first — this WILL wipe /dev/sdX
-sudo dd if=output/mobuntu-ps4-noble-dev.img of=/dev/sdX bs=4M status=progress conv=fsync
-```
-
-### Upstream Kernel
+### Kernel Reference
 
 | Detail | Value |
 |--------|-------|
-| Repo | `feeRnt/ps4-linux-12xx` |
-| Latest tested | 6.15.4 (March 2026) |
-| WiFi/BT | Marvell 8897 (CUH-12xx, Torus 2.0 chipset) |
-| HDMI | Fixed for CUH-12xx in 6.15.x |
-| GPU | `amdgpu` driver (Liverpool/GCN) |
+| Codename | strawberry |
+| Version | 6.18.21 |
+| Repo | `rmuxnet/ps4-linux-12xx` |
+| Status | Stable — recommended |
+| 7.0 kernel | Exists, known boot issues — not recommended |
 
-Kernel lineage: `fail0verflow/ps4-linux` → `codedwrench/ps4-linux` → `feeRnt/ps4-linux-12xx`.
+Kernel lineage: `fail0verflow/ps4-linux` → `codedwrench/ps4-linux`
+→ `feeRnt/ps4-linux-12xx` → `rmuxnet/ps4-linux-12xx`
 
-### Known Gaps
+### initramfs Attribution
 
-- DualShock 4 input — `hid-playstation` likely covers it; verify with kernel config
-- Bluetooth firmware blob — should come from `linux-firmware`; confirm `.hcd` file for your model
-- HDMI may need `drm.edid_firmware` tuning per display
-- PS4 Pro (CUH-7xxx) — different GPU, not targeted by `feeRnt/ps4-linux-12xx`
-- Internal storage boot (`/data/linux/boot/`) — some payloads auto-copy on first boot; not wired yet
+Three variants bundled in-tree. Original source: `DionKill/ps4-linux-tutorial`
+(original download link dead — files archived January 2023, preserved with
+source attribution in `upstream/UPSTREAM_SOURCES.md`).
+
+### Known Gaps (v0.1.0)
+
+- DualShock 4 input — hid-playstation kernel module likely works; not explicitly configured
+- PS4 Pro (CUH-7xxx, Baikal board) — untested; may work with `external` variant
+- Internal HDD boot requires external USB for initial setup
+- Mesa Docker build requires internet + significant build time on first run
+
