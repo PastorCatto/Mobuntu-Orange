@@ -13,7 +13,7 @@ PastorCatto/Mobuntu/
 ├── DOCUMENTATION.md
 ├── README.md
 │
-├── Mobuntu/                   # SDM845 build root (arkadin91/mobuntu-recipes wrapper)
+├── Mobuntu-SDM845/            # SDM845 build root (arkadin91/mobuntu-recipes wrapper)
 │   ├── build.sh
 │   ├── image.yaml
 │   ├── rootfs.yaml
@@ -26,20 +26,42 @@ PastorCatto/Mobuntu/
 │   ├── overlays/
 │   └── packages/
 │
-├── Mobuntu-L4T/               # Nintendo Switch build root
-│   ├── build.sh
-│   ├── build.env
-│   ├── scripts/               # 01-bootstrap through 05-package-hekate-7z
-│   ├── overlays/switch/
-│   ├── bootloader/ini/
-│   └── assets/
+├── Mobuntu-L4T/               # Nintendo Switch — thin wrapper on Switchroot upstream
+│   ├── build.sh               # Codename: Happy Mask Salesman → Tatl/Majora
+│   ├── devices/switch/
+│   │   └── device.conf
+│   ├── scripts/
+│   │   └── apply-overlays.sh
+│   ├── overlays/
+│   ├── upstream/
+│   │   ├── l4t-image-buildscripts/  # Switchroot upstream scripts (bundled)
+│   │   └── UPSTREAM_SOURCES.md
+│   ├── docs/
+│   ├── initramfs/             # Not applicable — sourced from Switchroot upstream
+│   └── audit/
+│       ├── CHANGELOG.md
+│       └── OVERLAY_DIFF.md
 │
-├── Mobuntu-PS4/               # PlayStation 4 build root
-│   ├── build.sh
-│   ├── build.env
-│   ├── scripts/               # 01-bootstrap through 05-package-output
-│   ├── overlays/ps4/
-│   └── kernel/
+├── Mobuntu-PS4/               # PlayStation 4 — Debian rootfs builder
+│   ├── build.sh               # Codename: Spider-Man
+│   ├── devices/ps4/
+│   │   └── device.conf
+│   ├── scripts/
+│   │   ├── build-mesa.sh
+│   │   ├── customize-rootfs.sh
+│   │   └── stage-boot.sh
+│   ├── overlays/
+│   ├── initramfs/
+│   │   ├── external/
+│   │   ├── internal-aeolia/
+│   │   └── internal-belize/
+│   ├── upstream/
+│   │   ├── bzImage            # Place strawberry kernel here
+│   │   ├── mesa-debs/         # Optional pre-built Mesa .deb files
+│   │   └── UPSTREAM_SOURCES.md
+│   ├── docs/
+│   └── audit/
+│       └── CHANGELOG.md
 │
 └── Mobuntu-PDK/               # Ubuntu PDK target (planned)
 ```
@@ -59,7 +81,7 @@ ancestor containing `.git` or a recognized variant folder), then scans for:
 
 | Folder | Variant |
 |--------|---------|
-| `Mobuntu/` | SDM845 phones |
+| `Mobuntu-SDM845/` | SDM845 phones |
 | `Mobuntu-PDK/` | Ubuntu PDK |
 | `Mobuntu-L4T/` | Nintendo Switch |
 | `Mobuntu-PS4/` | PlayStation 4 |
@@ -138,12 +160,12 @@ Full multi-device build entrypoint. Requires root (re-execs via sudo automatical
 #### Usage
 
 ```bash
-sudo bash Mobuntu/build.sh -d <device> [options]
+sudo bash Mobuntu-SDM845/build.sh -d <device> [options]
 
-sudo bash Mobuntu/build.sh -d beryllium
-sudo bash Mobuntu/build.sh -d beryllium -s plucky
-sudo bash Mobuntu/build.sh -d fajita -i
-sudo bash Mobuntu/build.sh -h
+sudo bash Mobuntu-SDM845/build.sh -d beryllium
+sudo bash Mobuntu-SDM845/build.sh -d beryllium -s plucky
+sudo bash Mobuntu-SDM845/build.sh -d fajita -i
+sudo bash Mobuntu-SDM845/build.sh -h
 ```
 
 #### Flags
@@ -212,7 +234,7 @@ overlays/usr/share/dbus-1/
 overlays/usr/share/polkit-1/
 ```
 
-Add additional paths to `Mobuntu/.devkit-sync-lock` (one per line, `#` for comments).
+Add additional paths to `Mobuntu-SDM845/.devkit-sync-lock` (one per line, `#` for comments).
 
 ---
 
@@ -252,11 +274,11 @@ HEXAGONRPCD_AFTER="multi-user.target"
 
 #### Adding a New Device
 
-1. Create `Mobuntu/devices/<codename>/device.conf`
-2. Create `Mobuntu/devices/<codename>/overlays/`
-3. Place firmware deb in `Mobuntu/files/`
+1. Create `Mobuntu-SDM845/devices/<codename>/device.conf`
+2. Create `Mobuntu-SDM845/devices/<codename>/overlays/`
+3. Place firmware deb in `Mobuntu-SDM845/files/`
 4. Press `r` in devkit to refresh
-5. Build with `sudo bash Mobuntu/build.sh -d <codename>`
+5. Build with `sudo bash Mobuntu-SDM845/build.sh -d <codename>`
 
 ---
 
@@ -313,7 +335,7 @@ Run debos with `--scratchsize=10G --disable-fakemachine` for WSL2 compatibility.
 ---
 
 ## Mobuntu-L4T — Nintendo Switch
-**Codename:** Happy Mask Salesman
+**Codename:** Happy Mask Salesman (dev) → Tatl / Majora (release)
 
 ### Overview
 
