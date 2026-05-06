@@ -1,5 +1,0 @@
-build/
-output/
-*.img
-__pycache__/
-*.pyc

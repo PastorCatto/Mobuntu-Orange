@@ -1,98 +1,74 @@
 # Mobuntu-PS4
+**Codename: Spider-Man**
+**Version: 0.1.0**
 
-PS4 Linux target for the Mobuntu project. Produces a `dd`-able USB disk image
-for PlayStation 4 consoles running firmware 12.52 via GoldHen.
+Minimal Debian-based Linux image builder for jailbroken PlayStation 4 consoles.
+Builds a rootfs, bundles the correct initramfs for your boot mode, and references
+the upstream strawberry kernel (6.18.21). Sub-600MB RAM idle target. X11 + Steam capable.
 
-Target hardware: **CUH-12xx** (Belize/Aeolia southbridge)
-Kernel upstream: **feeRnt/ps4-linux-12xx** (6.15.4 as of March 2026)
+## Philosophy
+- Kernel sourced from upstream (rmuxnet/ps4-linux-12xx) — NOT built here
+- initramfs variants bundled with attribution (source: DionKill/ps4-linux-tutorial)
+- Mesa 25 built via Docker (FalsePhilosopher/mesa-docker-ps4) or pre-built debs
+- Every decision tracked in audit/CHANGELOG.md
 
----
-
-## Pipeline
-
-| Stage | Script                   | Purpose                                              |
-|------:|--------------------------|------------------------------------------------------|
-| 01    | `bootstrap-rootfs.sh`    | Native amd64 debootstrap — no QEMU                  |
-| 02    | `pull-kernel.sh`         | Fetch prebuilt bzImage from feeRnt releases, or build from source |
-| 03    | `customize-rootfs.sh`    | chroot: packages, GPU/WiFi config, PS4 overlays      |
-| 04    | `make-rawimage.sh`       | raw ext4 image via `mke2fs -d`                       |
-| 05    | `package-output.sh`      | Assemble MBR disk image: FAT32 (boot) + ext4 (rootfs)|
-
----
-
-## Quick start
-
+## Quick Start
 ```bash
-sudo apt install debootstrap ubuntu-keyring e2fsprogs \
-                 parted dosfstools mtools curl jq python3
-cd Mobuntu-PS4
-sudo ./build.sh
+# Place bzImage from rmuxnet/ps4-linux-12xx releases at:
+upstream/bzImage
+
+# Build for USB/external boot
+sudo ./build.sh -d ps4 -p external
+
+# Build for internal HDD (fat PS4 — Aeolia board)
+sudo ./build.sh -d ps4 -p aeolia
+
+# Build for internal HDD (PS4 Slim — Belize board)
+sudo ./build.sh -d ps4 -p belize
 ```
 
-Output: `output/mobuntu-ps4-noble-dev.img`
+## Flags
+| Flag | Description | Options |
+|------|-------------|---------|
+| `-d` | Device codename | `ps4` (required) |
+| `-p` | Platform/boot variant | `external` `aeolia` `belize` (required) |
+| `-u` | UI selection | `gnustep` `lxde` `lxqt` |
+| `-b` | Debian suite | `bookworm` `trixie` |
 
-Write to USB:
-```bash
-sudo dd if=output/mobuntu-ps4-noble-dev.img of=/dev/sdX bs=4M status=progress conv=fsync
+## Platform Variants
+| `-p` | Board | Boot source |
+|------|-------|-------------|
+| `external` | Any | USB FAT32 root |
+| `aeolia` | Fat PS4 (older) | Internal `/data/linux/boot/` |
+| `belize` | PS4 Slim/newer | Internal `/data/linux/boot/` |
+
+## UI Options
+| UI | Notes |
+|----|-------|
+| `gnustep` | Primary — minimal overhead |
+| `lxde` | Lightweight GTK |
+| `lxqt` | Lightweight Qt |
+
+## Structure
+```
+Mobuntu-PS4/
+  build.sh                        ← entry point
+  devices/ps4/device.conf         ← device metadata
+  scripts/build-mesa.sh           ← Mesa 25 via Docker
+  scripts/customize-rootfs.sh     ← UI + user + PS4 config
+  scripts/stage-boot.sh           ← initramfs + kernel + bootargs
+  initramfs/                      ← bundled initramfs variants
+    external/
+    internal-aeolia/
+    internal-belize/
+  upstream/
+    bzImage                       ← place here from rmuxnet releases
+    UPSTREAM_SOURCES.md           ← all upstream references + checksums
+    mesa-debs/                    ← optional pre-built Mesa .deb files
+  docs/INSTALL.md
+  audit/CHANGELOG.md
 ```
 
----
-
-## USB disk layout
-
-```
-/dev/sdX
-├── p1: FAT32 (256 MiB)      <- kernel artifacts
-│   ├── bzImage
-│   ├── initramfs.cpio.gz
-│   └── cmdline.txt           (reference only)
-└── p2: ext4 (8 GiB)         <- rootfs (label: MOBU-PS4)
-    └── [Ubuntu noble amd64]
-```
-
----
-
-## Kernel
-
-Default: `KERNEL_MODE=prebuilt` — fetches the latest `feeRnt/ps4-linux-12xx`
-release from GitHub (no compilation needed).
-
-To build from source:
-```bash
-sudo KERNEL_MODE=source ./build.sh
-```
-
-Known-good cmdline (from feeRnt 6.15.4):
-```
-panic=0 clocksource=tsc consoleblank=0 net.ifnames=0 radeon.dpm=0 amdgpu.dpm=0
-drm.debug=0 console=uart8250,mmio32,0xd0340000 console=ttyS0,115200n8
-console=tty0 drm.edid_firmware=edid/1920x1080.bin
-```
-Override via `PS4_CMDLINE` in `build.env`.
-
----
-
-## PS4 side: boot flow
-
-1. Jailbreak with GoldHen (supports FW 12.52)
-2. Launch the Linux kexec payload from the homebrew launcher
-3. Payload reads `bzImage` + `initramfs.cpio.gz` from USB FAT32 (p1)
-4. kexec boots into the kernel; rootfs mounts from USB ext4 (p2)
-5. Login: `mobuntu` / `mobuntu` — **change immediately**
-
----
-
-## Known gaps / TODO
-
-- [ ] PS4 controller (DualShock 4) input — likely needs `hid-playstation` or
-      a PS4-specific driver; verify in `linux-firmware` or the kernel config
-- [ ] Internal storage boot — after first boot, some payloads copy
-      `bzImage`+`initramfs` to `/data/linux/boot/` on the PS4's internal
-      drive. Wire a post-install script if needed.
-- [ ] Bluetooth pairing — `bluez` is installed; verify BT firmware blob
-      (`BCM20702A1-0a5c-21e8.hcd` or similar) lands from `linux-firmware`
-- [ ] HDMI — feeRnt's kernel has HDMI fixes for CUH-12xx; the `amdgpu`
-      Xorg config is a starting point, may need `drm.edid_firmware` tuning
-      per display
-- [ ] Verify PS4 Pro (CUH-7xxx) — different GPU, `feeRnt/ps4-linux-12xx`
-      is CUH-12xx focused. Pro needs a separate kernel branch.
+## Related Projects
+- Mobuntu-SDM845 (Poco F1 / beryllium) — main project
+- Mobuntu-L4T (Nintendo Switch) — Happy Mask Salesman
