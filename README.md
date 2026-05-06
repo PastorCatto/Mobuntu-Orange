@@ -13,7 +13,7 @@ for the SDM845 target. L4T and PS4 variants are standalone pipelines.
 
 | Variant | Target | Output | Codename | Status |
 |---------|--------|--------|----------|--------|
-| `Mobuntu/` | SDM845 phones (Poco F1, OnePlus 6/6T) | flashable `.img` | — | Active |
+| `Mobuntu-SDM845/` | SDM845 phones (Poco F1, OnePlus 6/6T) | flashable `.img` | — | Active |
 | `Mobuntu-L4T/` | Nintendo Switch (Tegra X1) | hekate `.7z` | Happy Mask Salesman → Tatl/Majora | Scaffold |
 | `Mobuntu-PS4/` | PlayStation 4 (jailbroken, all boards) | rootfs tarball | Spider-Man | Scaffold |
 | `Mobuntu-PDK/` | Ubuntu Phone PDK | TBD | — | Planned |
@@ -38,9 +38,6 @@ python3 devkit.py --build Mobuntu-L4T   # headless build
 
 Multi-device Ubuntu ARM64 image builder for SDM845 phones.
 
-Built on top of [arkadin91/mobuntu-recipes](https://github.com/arkadin91/mobuntu-recipes),
-with multi-device scaffolding and Mobuntu customizations.
-
 ### Requirements
 
 - Ubuntu 24.04 host (**do not use 26.04** — QEMU arm64 chroot regression)
@@ -51,19 +48,19 @@ with multi-device scaffolding and Mobuntu customizations.
 
 ```sh
 # Build for Xiaomi Poco F1 (beryllium) — confirmed working baseline
-./Mobuntu/build.sh -d beryllium
+./Mobuntu-SDM845/build.sh -d beryllium
 
 # Build for OnePlus 6T (fajita)
-./Mobuntu/build.sh -d fajita
+./Mobuntu-SDM845/build.sh -d fajita
 
 # Skip rootfs stage, reuse existing tarball
-./Mobuntu/build.sh -d beryllium -i
+./Mobuntu-SDM845/build.sh -d beryllium -i
 
 # Override suite
-./Mobuntu/build.sh -d fajita -s plucky
+./Mobuntu-SDM845/build.sh -d fajita -s plucky
 
 # List available devices
-./Mobuntu/build.sh -h
+./Mobuntu-SDM845/build.sh -h
 ```
 
 ### Device Support
