@@ -1,0 +1,67 @@
+{{- $image              := or .image              "mobuntu-sdm845.img"          -}}
+{{- $rootfs             := or .rootfs             "mobuntu-rootfs-sdm845.tar.gz" -}}
+{{- $device             := or .device             "beryllium"                   -}}
+{{- $device_ui          := or .device_ui          "ubuntu-desktop-minimal"      -}}
+{{- $kernel_pkg         := or .kernel_pkg         "linux-image-6.18-sdm845"     -}}
+{{- $kernel_headers_pkg := or .kernel_headers_pkg "linux-headers-6.18-sdm845"   -}}
+{{- $environment        := or .environment        "ubuntu-desktop"              -}}
+
+architecture: arm64
+
+actions:
+  - action: unpack
+    description: Unpack root filesystem
+    compression: gz
+    file: {{ $rootfs }}
+
+  - action: overlay
+    description: Apply common overlays
+    source: overlays
+    destination: /
+
+  - action: overlay
+    description: Apply device overlays ({{ $device }})
+    source: devices/{{ $device }}/overlays
+    destination: /
+
+  - action: recipe
+    recipe: packages/packages-{{ $environment }}.yaml
+
+  - action: image-partition
+    description: Creating image
+    imagename: {{ $image }}
+    imagesize: 10GB
+    partitiontype: gpt
+    mountpoints:
+      - mountpoint: /
+        partition: mobuntu
+    partitions:
+      - name: mobuntu
+        fs: ext4
+        start: 0M
+        end: 100%
+
+  - action: filesystem-deploy
+    description: Deploying filesystem into image
+
+  - action: run
+    chroot: true
+    script: scripts/update-apt.sh
+
+  - action: overlay
+    source: files
+    destination: /opt/
+
+  - action: run
+    chroot: true
+    description: Final system configuration
+    script: scripts/final.sh
+    environment:
+      DEVICE_UI: {{ $device_ui }}
+      KERNEL_PKG: {{ $kernel_pkg }}
+      KERNEL_HEADERS_PKG: {{ $kernel_headers_pkg }}
+
+  - action: run
+    description: Pull out rootfs image
+    postprocess: true
+    command: dd if={{ $image }} skip=17408 of=root-{{ $image }} iflag=skip_bytes,count_bytes && e2fsck -fy root-{{ $image }} && resize2fs -f -M root-{{ $image }}
