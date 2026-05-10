@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # Mobuntu-PS4 build.sh
-# Codename: Spider-Man
-# Version: 0.1.0
+# Codename: Spider-Man / Spider-Man: Doctor Octavius (Theseus build)
+# Version: 0.2.0
 #
 # Builds a minimal Debian rootfs for jailbroken PS4 consoles.
 # Bundles the correct initramfs and drops bootloader files based on boot mode.
 # Mesa 25 is built via FalsePhilosopher/mesa-docker-ps4 Docker container.
 # Kernel (strawberry 6.18.21) is NOT built here — sourced from upstream.
 #
+# Codenames:
+#   Spider-Man            — baseline build (no Theseus)
+#   Spider-Man: Doctor Octavius — Theseus Xbox dashboard build (-m theseus)
+#
 # Usage:
-#   sudo ./build.sh -d ps4 -p <variant> [-u <ui>] [-b <suite>] [-h]
+#   sudo ./build.sh -d ps4 -p <variant> [-u <ui>] [-b <suite>] [-m <modes>] [-h]
 #
 #   -d  Device codename (ps4)                          [required]
 #   -p  Boot/platform variant:
@@ -18,6 +22,9 @@
 #         belize          — Internal HDD, PS4 Slim/newer (Belize board)
 #   -u  UI selection: gnustep|lxde|lxqt               [default: from device.conf]
 #   -b  Debian suite: bookworm|trixie                  [default: from device.conf]
+#   -m  Mode overlays (comma-separated):
+#         theseus         — Theseus Xbox dashboard (Doctor Octavius build)
+#         desktop         — LXDE fallback desktop (requires theseus)
 #   -h  Help
 
 set -euo pipefail
@@ -27,7 +34,7 @@ INITRAMFS_DIR="${SCRIPT_DIR}/initramfs"
 OVERLAYS_DIR="${SCRIPT_DIR}/overlays"
 SCRIPTS_DIR="${SCRIPT_DIR}/scripts"
 OUTPUT_DIR="${SCRIPT_DIR}/output"
-VERSION="0.1.0"
+VERSION="0.2.0"
 CODENAME="Spider-Man"
 
 # ── Colours ──────────────────────────────────────────────────────────────────
@@ -52,13 +59,15 @@ DEVICE=""
 PLATFORM=""
 UI_OVERRIDE=""
 SUITE_OVERRIDE=""
+MODE_OVERLAYS=""
 
-while getopts "d:p:u:b:h" opt; do
+while getopts "d:p:u:b:m:h" opt; do
     case $opt in
         d) DEVICE="$OPTARG" ;;
         p) PLATFORM="$OPTARG" ;;
         u) UI_OVERRIDE="$OPTARG" ;;
         b) SUITE_OVERRIDE="$OPTARG" ;;
+        m) MODE_OVERLAYS="$OPTARG" ;;
         h)
             grep '^#' "$0" | grep -v '#!/' | sed 's/^# \?//'
             exit 0
@@ -66,6 +75,30 @@ while getopts "d:p:u:b:h" opt; do
         *) error "Unknown option. Use -h for help." ;;
     esac
 done
+
+# ── Resolve mode flags ────────────────────────────────────────────────────────
+ENABLE_THESEUS=false
+ENABLE_DESKTOP=false
+if [ -n "$MODE_OVERLAYS" ]; then
+    IFS=',' read -ra MODES <<< "$MODE_OVERLAYS"
+    for mode in "${MODES[@]}"; do
+        case "$mode" in
+            theseus) ENABLE_THESEUS=true ;;
+            desktop) ENABLE_DESKTOP=true ;;
+            *) error "Unknown mode overlay '${mode}'. Valid: theseus, desktop" ;;
+        esac
+    done
+fi
+
+# desktop requires theseus
+if [ "$ENABLE_DESKTOP" = true ] && [ "$ENABLE_THESEUS" = false ]; then
+    error "'-m desktop' requires '-m theseus' — use '-m theseus,desktop'"
+fi
+
+# Set codename based on mode
+if [ "$ENABLE_THESEUS" = true ]; then
+    CODENAME="Spider-Man: Doctor Octavius"
+fi
 
 [ -z "$DEVICE" ]   && error "Device required. Use -d ps4"
 [ -z "$PLATFORM" ] && error "Platform variant required. Use -p external|aeolia|belize"
@@ -127,6 +160,17 @@ if [ ! -f "$KERNEL_PATH" ]; then
     error "Kernel missing — cannot continue. See upstream/UPSTREAM_SOURCES.md"
 fi
 
+# ── Validate Theseus source (Doctor Octavius builds only) ─────────────────────
+if [ "$ENABLE_THESEUS" = true ]; then
+    THESEUS_SRC="${SCRIPT_DIR}/upstream/theseus"
+    if [ ! -d "$THESEUS_SRC" ] || [ -z "$(ls -A "$THESEUS_SRC" 2>/dev/null)" ]; then
+        warn "Theseus source not found at upstream/theseus/"
+        warn "Clone it from: https://github.com/MrMilenko/Theseus"
+        warn "  git clone https://github.com/MrMilenko/Theseus upstream/theseus"
+        error "Theseus source missing — cannot build Doctor Octavius variant."
+    fi
+fi
+
 # ── Dependency checks ─────────────────────────────────────────────────────────
 for dep in debootstrap docker; do
     command -v "$dep" &>/dev/null || error "Missing dependency: ${dep}"
@@ -138,7 +182,7 @@ mkdir -p "$OUTPUT_DIR"
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║       Mobuntu-PS4 Build System v${VERSION}               ║"
-echo "║       Codename: ${CODENAME}                        ║"
+echo "║       Codename: ${CODENAME}        ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 status "Device    : ${DEVICE_MODEL:-PS4} (${DEVICE})"
@@ -146,6 +190,8 @@ status "Platform  : ${PLATFORM} — ${BOOT_DESC}"
 status "UI        : ${DEVICE_UI}"
 status "Suite     : Debian ${DEBIAN_SUITE}"
 status "Boot mode : ${BOOT_MODE}"
+status "Theseus   : ${ENABLE_THESEUS}"
+status "Desktop   : ${ENABLE_DESKTOP}"
 echo ""
 
 # ── Stage 1: Debootstrap rootfs ───────────────────────────────────────────────
@@ -177,7 +223,9 @@ bash "${SCRIPTS_DIR}/customize-rootfs.sh" \
     --suite    "$DEBIAN_SUITE" \
     --hostname "${PRESEED_HOSTNAME:-mobuntu-ps4}" \
     --username "${PRESEED_USERNAME:-}" \
-    --password "${PRESEED_PASSWORD:-}" || error "Rootfs customization failed"
+    --password "${PRESEED_PASSWORD:-}" \
+    --theseus  "$ENABLE_THESEUS" \
+    --desktop  "$ENABLE_DESKTOP" || error "Rootfs customization failed"
 
 # ── Stage 4: Package rootfs tarball ──────────────────────────────────────────
 TIMESTAMP="$(date +%Y%m%d)"

@@ -79,3 +79,56 @@ Each future entry must include:
 - Files added/modified/removed
 - Reason for each change
 - Any upstream dependency changes
+
+---
+
+## [0.2.0] — 2026-05-10 — Spider-Man: Doctor Octavius
+
+### Codename Split
+- Spider-Man — baseline build (no Theseus), unchanged behaviour
+- Spider-Man: Doctor Octavius — new variant, Theseus Xbox dashboard + session switcher
+
+### New: -m flag in build.sh
+- `-m theseus` enables Doctor Octavius mode (Theseus build + session switcher)
+- `-m theseus,desktop` adds LXDE as desktop fallback alongside Theseus
+- `-m desktop` alone is an error (requires theseus)
+- CODENAME variable set dynamically: "Spider-Man" or "Spider-Man: Doctor Octavius"
+
+### New: overlays/theseus/
+- `etc/X11/xinit/xinitrc` — reads /var/mobuntu/session-mode, launches Theseus or LXDE
+- `etc/systemd/system/mobuntu-session.service` — starts X on boot as mobuntu user, no display manager
+- `var/mobuntu/session-mode` — default: console
+- `session-switcher/session-switcher.c` — SDL2 C app, controller-first UI
+- `session-switcher/Makefile` — pkg-config SDL2 build
+
+### New: upstream/theseus/
+- Placeholder README with clone instructions
+- Theseus source must be cloned here before Doctor Octavius builds
+- customize-rootfs.sh detects presence and builds from local source (no internet at build time)
+
+### Modified: scripts/customize-rootfs.sh
+- Added --theseus / --desktop flags
+- Doctor Octavius path: installs xinit (not lightdm), SDL2/mpv/curl build deps,
+  copies Theseus source + session-switcher into rootfs, builds both in chroot,
+  enables mobuntu-session.service
+- Spider-Man path: unchanged (lightdm + autologin)
+
+### Modified: scripts/customize-rootfs.sh — debootstrap include
+- lightdm removed from Stage 1 include list for Doctor Octavius builds
+  (resolved at Stage 3 based on --theseus flag)
+- Note: Stage 1 still includes lightdm in --include for baseline Spider-Man
+
+### Modified: upstream/UPSTREAM_SOURCES.md
+- Added Theseus entry (MrMilenko/Theseus)
+- Added session-switcher entry
+
+### Modified: README.md, docs/INSTALL.md
+- Updated for 0.2.0, both codenames documented
+
+### Known Limitations (v0.2.0)
+- Session switcher renders coloured boxes only (no text) — SDL2 TTF not linked
+  to keep deps minimal. Text labels planned for 0.3.0.
+- SELECT+START hold detection not yet wired into Theseus itself — must be
+  launched as a separate process via a wrapper or keybinding for now.
+- Theseus DualShock 4 axis mapping unverified on real PS4 hardware.
+- LXDE desktop fallback untested with Mesa 25 / PS4 GCN GPU.

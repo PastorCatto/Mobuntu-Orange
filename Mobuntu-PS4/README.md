@@ -1,10 +1,15 @@
 # Mobuntu-PS4
-**Codename: Spider-Man**
-**Version: 0.1.0**
+**Codenames: Spider-Man / Spider-Man: Doctor Octavius**
+**Version: 0.2.0**
 
 Minimal Debian-based Linux image builder for jailbroken PlayStation 4 consoles.
 Builds a rootfs, bundles the correct initramfs for your boot mode, and references
 the upstream strawberry kernel (6.18.21). Sub-600MB RAM idle target. X11 + Steam capable.
+
+| Codename | Description |
+|----------|-------------|
+| Spider-Man | Baseline — minimal rootfs, traditional desktop UI |
+| Spider-Man: Doctor Octavius | Theseus Xbox dashboard as primary UI, controller-first session switcher |
 
 ## Philosophy
 - Kernel sourced from upstream (rmuxnet/ps4-linux-12xx) — NOT built here
@@ -13,18 +18,20 @@ the upstream strawberry kernel (6.18.21). Sub-600MB RAM idle target. X11 + Steam
 - Every decision tracked in audit/CHANGELOG.md
 
 ## Quick Start
+
+### Spider-Man (baseline)
 ```bash
-# Place bzImage from rmuxnet/ps4-linux-12xx releases at:
-upstream/bzImage
-
-# Build for USB/external boot
+# Place bzImage from rmuxnet/ps4-linux-12xx releases at upstream/bzImage
 sudo ./build.sh -d ps4 -p external
+```
 
-# Build for internal HDD (fat PS4 — Aeolia board)
-sudo ./build.sh -d ps4 -p aeolia
+### Spider-Man: Doctor Octavius (Theseus)
+```bash
+# Place bzImage AND clone Theseus source:
+git clone https://github.com/MrMilenko/Theseus upstream/theseus
 
-# Build for internal HDD (PS4 Slim — Belize board)
-sudo ./build.sh -d ps4 -p belize
+# Theseus + LXDE desktop fallback
+sudo ./build.sh -d ps4 -p external -m theseus,desktop
 ```
 
 ## Flags
@@ -34,6 +41,7 @@ sudo ./build.sh -d ps4 -p belize
 | `-p` | Platform/boot variant | `external` `aeolia` `belize` (required) |
 | `-u` | UI selection | `gnustep` `lxde` `lxqt` |
 | `-b` | Debian suite | `bookworm` `trixie` |
+| `-m` | Mode overlays | `theseus` `desktop` (comma-separated) |
 
 ## Platform Variants
 | `-p` | Board | Boot source |
@@ -42,29 +50,31 @@ sudo ./build.sh -d ps4 -p belize
 | `aeolia` | Fat PS4 (older) | Internal `/data/linux/boot/` |
 | `belize` | PS4 Slim/newer | Internal `/data/linux/boot/` |
 
-## UI Options
-| UI | Notes |
-|----|-------|
-| `gnustep` | Primary — minimal overhead |
-| `lxde` | Lightweight GTK |
-| `lxqt` | Lightweight Qt |
+## Doctor Octavius — Session Switcher
+Boot defaults to Theseus (Xbox dashboard). Hold **SELECT + START** for 3 seconds
+at any time to open the session switcher. Navigate with D-pad or left stick,
+confirm with Cross, cancel with Circle. No keyboard required.
 
 ## Structure
 ```
 Mobuntu-PS4/
-  build.sh                        ← entry point
-  devices/ps4/device.conf         ← device metadata
-  scripts/build-mesa.sh           ← Mesa 25 via Docker
-  scripts/customize-rootfs.sh     ← UI + user + PS4 config
-  scripts/stage-boot.sh           ← initramfs + kernel + bootargs
-  initramfs/                      ← bundled initramfs variants
-    external/
-    internal-aeolia/
-    internal-belize/
+  build.sh                        <- entry point
+  devices/ps4/device.conf         <- device metadata
+  scripts/build-mesa.sh           <- Mesa 25 via Docker
+  scripts/customize-rootfs.sh     <- UI + user + PS4 config
+  scripts/stage-boot.sh           <- initramfs + kernel + bootargs
+  overlays/
+    theseus/                      <- Doctor Octavius overlay
+      session-switcher/           <- SDL2 controller-friendly switcher (C)
+      etc/X11/xinit/xinitrc       <- startx session entry
+      etc/systemd/system/         <- mobuntu-session.service
+      var/mobuntu/session-mode    <- default: console
+  initramfs/                      <- bundled initramfs variants
   upstream/
-    bzImage                       ← place here from rmuxnet releases
-    UPSTREAM_SOURCES.md           ← all upstream references + checksums
-    mesa-debs/                    ← optional pre-built Mesa .deb files
+    bzImage                       <- place here from rmuxnet releases
+    theseus/                      <- place here: git clone MrMilenko/Theseus
+    UPSTREAM_SOURCES.md
+    mesa-debs/                    <- optional pre-built Mesa .deb files
   docs/INSTALL.md
   audit/CHANGELOG.md
 ```

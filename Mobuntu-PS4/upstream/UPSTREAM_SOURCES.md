@@ -1,7 +1,7 @@
 # Mobuntu-PS4 — Upstream Sources Reference
-# Codename: Spider-Man
-# Version: 0.1.0
-# Last Updated: 2026-05-06
+# Codenames: Spider-Man (baseline) / Spider-Man: Doctor Octavius (Theseus)
+# Version: 0.2.0
+# Last Updated: 2026-05-10
 #
 # Mobuntu-PS4 does NOT build kernels.
 # Place bzImage from upstream at upstream/bzImage before building.
@@ -67,4 +67,25 @@ Firmware support: varies by release — check releases page
 # INITRAMFS_BELIZE_SHA256=
 
 ---
-Last updated: 2026-05-06
+Last updated: 2026-05-10
+
+## Theseus — Xbox Dashboard PC Port [DOCTOR OCTAVIUS BUILDS ONLY]
+Repo:     https://github.com/MrMilenko/Theseus
+By:       MrMilenko / TeamUIX (https://github.com/OfficialTeamUIX)
+Place at: upstream/theseus/  (git clone --depth=1 https://github.com/MrMilenko/Theseus upstream/theseus)
+
+What it is: Reverse-engineered Xbox dashboard rebuilt from retail binary.
+            Runs natively on Linux as "UIX Desktop" — 3D launcher + media center.
+            Used as the primary UI in Doctor Octavius builds.
+
+Build deps (installed into rootfs automatically by customize-rootfs.sh):
+  build-essential pkg-config libsdl2-dev libsdl2-mixer-dev libmpv-dev libcurl4-openssl-dev
+Requires: C++17, OpenGL 3.2
+
+License: Check before redistributing in devkit bundles.
+
+## Session Switcher — Mobuntu-PS4 component [DOCTOR OCTAVIUS BUILDS ONLY]
+Source: overlays/theseus/session-switcher/session-switcher.c
+Built in-tree — no external dependency beyond SDL2 (already a Theseus dep).
+DualShock 4 mapping: SDL2 gamecontrollerdb.txt (standard community DB).
+
