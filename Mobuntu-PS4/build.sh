@@ -160,14 +160,15 @@ if [ ! -f "$KERNEL_PATH" ]; then
     error "Kernel missing — cannot continue. See upstream/UPSTREAM_SOURCES.md"
 fi
 
-# ── Validate Theseus source (Doctor Octavius builds only) ─────────────────────
+# ── Validate Theseus binary (Doctor Octavius builds only) ─────────────────────
 if [ "$ENABLE_THESEUS" = true ]; then
-    THESEUS_SRC="${SCRIPT_DIR}/upstream/theseus"
-    if [ ! -d "$THESEUS_SRC" ] || [ -z "$(ls -A "$THESEUS_SRC" 2>/dev/null)" ]; then
-        warn "Theseus source not found at upstream/theseus/"
-        warn "Clone it from: https://github.com/MrMilenko/Theseus"
-        warn "  git clone https://github.com/MrMilenko/Theseus upstream/theseus"
-        error "Theseus source missing — cannot build Doctor Octavius variant."
+    THESEUS_BIN="${SCRIPT_DIR}/upstream/theseus/theseus"
+    if [ ! -f "$THESEUS_BIN" ]; then
+        warn "Theseus binary not found at upstream/theseus/theseus"
+        warn "Download the pre-built Linux binary from TeamUIX:"
+        warn "  https://github.com/MrMilenko/Theseus/releases"
+        warn "Extract and place the 'theseus' binary at: upstream/theseus/theseus"
+        error "Theseus binary missing — cannot build Doctor Octavius variant."
     fi
 fi
 

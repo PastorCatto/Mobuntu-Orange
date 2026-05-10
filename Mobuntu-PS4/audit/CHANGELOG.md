@@ -132,3 +132,24 @@ Each future entry must include:
   launched as a separate process via a wrapper or keybinding for now.
 - Theseus DualShock 4 axis mapping unverified on real PS4 hardware.
 - LXDE desktop fallback untested with Mesa 25 / PS4 GCN GPU.
+
+---
+
+## [0.2.1] — 2026-05-10 — Theseus pre-built binary
+
+### Changed: upstream/theseus/ approach
+- Switched from build-from-source to pre-built binary drop-in
+- Theseus distributes a Linux public beta binary (UIX-Desktop-Linux-Public_Beta_*.zip)
+- Place extracted 'theseus' binary at upstream/theseus/theseus before building
+
+### Modified: build.sh
+- Theseus validation now checks for upstream/theseus/theseus binary (not source tree)
+- Error message updated with download instructions
+
+### Modified: scripts/customize-rootfs.sh
+- THESEUS_PKGS reduced to runtime-only: libsdl2-2.0-0 libsdl2-mixer-2.0-0 libmpv1 libcurl4
+- Theseus install: binary copy + chmod (replaces chroot source build)
+- Session switcher still built in chroot (small C file, build tools installed + purged after)
+
+### Modified: upstream/theseus/README.md
+- Updated with binary download and placement instructions

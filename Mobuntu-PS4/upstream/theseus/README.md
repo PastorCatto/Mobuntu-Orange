@@ -1,35 +1,33 @@
 # upstream/theseus/
 
-This directory must contain the Theseus source tree before building a
+This directory must contain the pre-built Theseus binary before building a
 **Spider-Man: Doctor Octavius** image.
 
 ## How to populate
 
-```bash
-git clone https://github.com/MrMilenko/Theseus upstream/theseus
-```
+1. Download the Linux public beta from TeamUIX:
+   https://github.com/MrMilenko/Theseus/releases
 
-Or for a pinned release:
+2. Extract and place the binary here:
+   ```bash
+   unzip UIX-Desktop-Linux-Public_Beta_*.zip
+   cp UIX-Desktop-Linux-Public_Beta_*/theseus upstream/theseus/theseus
+   chmod +x upstream/theseus/theseus
+   ```
 
-```bash
-git clone --branch <tag> https://github.com/MrMilenko/Theseus upstream/theseus
-```
+The build system checks for `upstream/theseus/theseus` before starting a
+Doctor Octavius build and will error early if it's missing.
 
-## Why it's not pre-bundled in this repo
+## Runtime dependencies (installed into rootfs automatically)
 
-Theseus is an actively developed project. Check its license before
-redistributing in a devkit bundle — if redistribution is permitted,
-the devkit packaging script will clone and commit it automatically.
+- libsdl2-2.0-0
+- libsdl2-mixer-2.0-0
+- libmpv1
+- libcurl4
 
-## Build requirements (installed into rootfs automatically)
-
-- C++17
-- OpenGL 3.2
-- SDL2, SDL2_mixer, libmpv, libcurl
-
-These are pulled via apt during the customize-rootfs.sh stage.
+No build tools required — the binary is dropped straight into the rootfs.
 
 ## Reference
 
-- Repo: https://github.com/MrMilenko/Theseus
-- TeamUIX: https://github.com/OfficialTeamUIX
+- Releases: https://github.com/MrMilenko/Theseus/releases
+- TeamUIX:  https://github.com/OfficialTeamUIX

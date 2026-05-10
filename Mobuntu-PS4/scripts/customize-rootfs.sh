@@ -86,10 +86,10 @@ if [ "$ENABLE_DESKTOP" = "true" ]; then
     DESKTOP_PKGS="lxde lxde-core"
 fi
 
-# Theseus build dependencies
+# Theseus runtime dependencies (pre-built binary — no build deps needed)
 THESEUS_PKGS=""
 if [ "$ENABLE_THESEUS" = "true" ]; then
-    THESEUS_PKGS="build-essential pkg-config libsdl2-dev libsdl2-mixer-dev libmpv-dev libcurl4-openssl-dev"
+    THESEUS_PKGS="libsdl2-2.0-0 libsdl2-mixer-2.0-0 libmpv1 libcurl4"
 fi
 
 chroot "$ROOTFS" /bin/bash -c "
@@ -125,34 +125,32 @@ if [ "$ENABLE_THESEUS" = "true" ]; then
     # Doctor Octavius: startx via systemd, no display manager
     cyan "Configuring startx session (Theseus / Doctor Octavius)..."
 
-    # Copy Theseus source into rootfs for build
+    # Copy pre-built Theseus binary into rootfs
     SCRIPT_DIR_REL="$(dirname "$0")"
-    THESEUS_SRC="${SCRIPT_DIR_REL}/../upstream/theseus"
-    if [ -d "$THESEUS_SRC" ]; then
-        cyan "Copying Theseus source into rootfs..."
-        cp -r "$THESEUS_SRC" "${ROOTFS}/usr/local/src/theseus"
+    THESEUS_BIN="${SCRIPT_DIR_REL}/../upstream/theseus/theseus"
+    if [ -f "$THESEUS_BIN" ]; then
+        cyan "Installing pre-built Theseus binary..."
+        cp "$THESEUS_BIN" "${ROOTFS}/usr/local/bin/theseus"
+        chmod +x "${ROOTFS}/usr/local/bin/theseus"
+    else
+        warn "Theseus binary not found at upstream/theseus/theseus — skipping"
     fi
 
-    # Copy session switcher source
+    # Build session switcher inside chroot (small C file, SDL2 runtime already installed)
     SWITCHER_SRC="${OVERLAYS}/theseus/session-switcher"
     if [ -d "$SWITCHER_SRC" ]; then
-        cp -r "$SWITCHER_SRC" "${ROOTFS}/usr/local/src/session-switcher"
+        cp -r "$SWITCHER_SRC" "${ROOTFS}/tmp/session-switcher"
+        chroot "$ROOTFS" /bin/bash -c "
+            apt-get install -y --no-install-recommends build-essential pkg-config libsdl2-dev
+            cd /tmp/session-switcher && make
+            cp session-switcher /usr/local/bin/mobuntu-session-switcher
+            chmod +x /usr/local/bin/mobuntu-session-switcher
+            apt-get remove -y --purge build-essential pkg-config libsdl2-dev
+            apt-get autoremove -y
+            apt-get clean
+            rm -rf /tmp/session-switcher
+        " || warn "Session switcher build failed — controller UI will be unavailable"
     fi
-
-    # Build Theseus and session switcher inside chroot
-    chroot "$ROOTFS" /bin/bash -c "
-        set -e
-        cd /usr/local/src/theseus/build
-        make desktop
-        cp theseus /usr/local/bin/theseus
-        chmod +x /usr/local/bin/theseus
-
-        # Build session switcher
-        cd /usr/local/src/session-switcher
-        make
-        cp session-switcher /usr/local/bin/mobuntu-session-switcher
-        chmod +x /usr/local/bin/mobuntu-session-switcher
-    " || { warn "Theseus build failed inside chroot — binary may need manual installation"; }
 
     # Enable mobuntu-session systemd service (starts X on boot)
     chroot "$ROOTFS" /bin/bash -c "
