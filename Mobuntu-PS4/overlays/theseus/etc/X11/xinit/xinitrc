@@ -1,0 +1,16 @@
+#!/bin/sh
+# Mobuntu-PS4 — Doctor Octavius xinitrc
+# Reads /var/mobuntu/session-mode and launches the appropriate session.
+# If session-switcher is triggered (SELECT+START 3s), it writes the new mode
+# and restarts X, which re-reads this file.
+
+MODE=$(cat /var/mobuntu/session-mode 2>/dev/null || echo "console")
+
+case "$MODE" in
+    desktop)
+        exec startlxde
+        ;;
+    console|*)
+        exec /usr/local/bin/theseus
+        ;;
+esac
