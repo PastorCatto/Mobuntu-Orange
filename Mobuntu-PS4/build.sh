@@ -173,7 +173,7 @@ if [ "$ENABLE_THESEUS" = true ]; then
 fi
 
 # ── Dependency checks ─────────────────────────────────────────────────────────
-for dep in debootstrap docker; do
+for dep in debootstrap; do
     command -v "$dep" &>/dev/null || error "Missing dependency: ${dep}"
 done
 
@@ -202,12 +202,12 @@ rm -rf "$ROOTFS_DIR"
 debootstrap \
     --arch=amd64 \
     --variant=minbase \
-    --include=systemd,systemd-sysv,dbus,apt,sudo,locales,ca-certificates,\
-network-manager,openssh-server,alsa-utils,pulseaudio,xserver-xorg-core,\
-xserver-xorg-input-libinput,xinit,lightdm \
+    --include=systemd,systemd-sysv,dbus,apt,sudo,locales,ca-certificates \
     "$DEBIAN_SUITE" \
     "$ROOTFS_DIR" \
     "http://deb.debian.org/debian" || error "debootstrap failed"
+# NOTE: network-manager, pulseaudio, xorg, lightdm etc. excluded from Stage 1
+# — they pull in dconf-service which fails in WSL2/chroot. Installed in Stage 3.
 
 # ── Stage 2: Build Mesa 25 via Docker ────────────────────────────────────────
 status "[ 2/5 ] Building Mesa 25 (PS4-patched) via Docker..."

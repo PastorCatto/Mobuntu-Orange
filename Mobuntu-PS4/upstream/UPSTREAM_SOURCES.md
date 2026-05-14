@@ -89,3 +89,18 @@ Source: overlays/theseus/session-switcher/session-switcher.c
 Built in-tree — no external dependency beyond SDL2 (already a Theseus dep).
 DualShock 4 mapping: SDL2 gamecontrollerdb.txt (standard community DB).
 
+
+## Mesa 25 — PS4 filesystem overlay [RECOMMENDED — replaces Docker build]
+File:    mesa-ps4-25.3.0-devel-trixie.7z
+Place at: upstream/mesa-ps4-25.3.0-devel-trixie.7z
+
+Source: triki1 (ps4linux.com forums)
+Versions: libdrm 2.4.125, Mesa 25.3.0-devel
+Target: Debian Trixie, x86_64 + i386
+
+Contents installed into rootfs:
+  mesa-ps4-25.3.0-devel/usr/ → /usr/
+  mesa-ps4-25.3.0-devel/etc/ → /etc/
+
+Note: The 7z also contains libdrm-git/ and mesa-git/ source trees — these
+are ignored during install. Only the pre-built overlay is extracted.
