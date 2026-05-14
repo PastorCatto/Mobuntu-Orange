@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # scripts/build-mesa.sh
-# Builds PS4-patched Mesa 25 via FalsePhilosopher/mesa-docker-ps4 Docker container.
-# Installs resulting packages into the rootfs.
+# Installs PS4-patched Mesa 25 into the rootfs.
+#
+# Priority order:
+#   1. upstream/mesa-ps4-*.7z  — pre-built filesystem overlay (recommended)
+#   2. upstream/mesa-debs/*.deb — pre-built Debian packages (fallback)
+#   3. Docker build via FalsePhilosopher/mesa-docker-ps4 (last resort)
 #
 # Usage:
 #   build-mesa.sh --rootfs <path> --suite <suite>
@@ -10,14 +14,16 @@ set -euo pipefail
 
 ROOTFS=""
 SUITE=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UPSTREAM_DIR="${SCRIPT_DIR}/../upstream"
 MESA_DOCKER_REPO="https://github.com/FalsePhilosopher/mesa-docker-ps4"
 MESA_DOCKER_IMAGE="mesa-docker-ps4"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MESA_BUILD_DIR="/tmp/mobuntu-mesa-build"
 
 cyan()  { echo -e "\e[96m    $*\e[0m"; }
 green() { echo -e "\e[92m    $*\e[0m"; }
 error() { echo -e "\e[91mERROR: $*\e[0m" >&2; exit 1; }
+warn()  { echo -e "\e[93m    WARNING: $*\e[0m"; }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -29,12 +35,58 @@ done
 
 [ -d "$ROOTFS" ] || error "rootfs not found: ${ROOTFS}"
 
-# ── Check for pre-built Mesa debs ─────────────────────────────────────────────
-MESA_DEBS_DIR="${SCRIPT_DIR}/../upstream/mesa-debs"
-if [ -d "$MESA_DEBS_DIR" ] && ls "$MESA_DEBS_DIR"/*.deb &>/dev/null 2>&1; then
+# ── Method 1: 7z filesystem overlay ──────────────────────────────────────────
+MESA_7Z="$(ls "${UPSTREAM_DIR}"/mesa-ps4-*.7z 2>/dev/null | head -1 || true)"
+if [ -n "$MESA_7Z" ]; then
+    cyan "Found Mesa 7z overlay: $(basename "$MESA_7Z")"
+
+    # Ensure p7zip is available
+    if ! command -v 7z &>/dev/null; then
+        cyan "Installing p7zip-full..."
+        apt-get install -y --no-install-recommends p7zip-full
+    fi
+
+    # Detect the inner directory name (e.g. mesa-ps4-25.3.0-devel)
+    cyan "Detecting inner directory name..."
+    MESA_INNER="$(7z l "$MESA_7Z" | awk '/^[0-9]{4}-/{print $NF}' | grep -v "^libdrm-git\|^mesa-git\|^Howto\|^folders\|\." | grep "/" | head -1 | cut -d'/' -f1 || true)"
+
+    if [ -z "$MESA_INNER" ]; then
+        # Fallback: just use the known name
+        MESA_INNER="mesa-ps4-25.3.0-devel"
+        warn "Could not auto-detect inner dir — using fallback: ${MESA_INNER}"
+    fi
+    cyan "Inner directory: ${MESA_INNER}"
+
+    # Extract only usr/ and etc/ from the overlay — skip source trees
+    cyan "Extracting ${MESA_INNER}/usr and ${MESA_INNER}/etc into rootfs..."
+    EXTRACT_TMP="$(mktemp -d)"
+    cyan "Temp dir: ${EXTRACT_TMP}"
+
+    7z x "$MESA_7Z" \
+        "${MESA_INNER}/usr" \
+        "${MESA_INNER}/etc" \
+        -o"${EXTRACT_TMP}" \
+        -y || error "7z extraction failed — is the archive corrupt or incomplete?"
+
+    # Verify extraction produced something
+    [ -d "${EXTRACT_TMP}/${MESA_INNER}/usr" ] || error "Extraction succeeded but usr/ not found at ${EXTRACT_TMP}/${MESA_INNER}/usr"
+    [ -d "${EXTRACT_TMP}/${MESA_INNER}/etc" ] || error "Extraction succeeded but etc/ not found at ${EXTRACT_TMP}/${MESA_INNER}/etc"
+
+    # Overlay into rootfs
+    cyan "Overlaying usr/ and etc/ into rootfs..."
+    cp -a "${EXTRACT_TMP}/${MESA_INNER}/usr/." "${ROOTFS}/usr/"
+    cp -a "${EXTRACT_TMP}/${MESA_INNER}/etc/." "${ROOTFS}/etc/"
+
+    rm -rf "$EXTRACT_TMP"
+    green "Mesa installed from 7z overlay. (libdrm 2.4.125, Mesa 25.3.0-devel)"
+    exit 0
+fi
+
+# ── Method 2: Pre-built .deb files ───────────────────────────────────────────
+MESA_DEBS_DIR="${UPSTREAM_DIR}/mesa-debs"
+if [ -d "$MESA_DEBS_DIR" ] && ls "${MESA_DEBS_DIR}"/*.deb &>/dev/null 2>&1; then
     cyan "Pre-built Mesa debs found at upstream/mesa-debs/ — skipping Docker build"
-    cyan "Installing pre-built Mesa packages..."
-    cp "$MESA_DEBS_DIR"/*.deb "${ROOTFS}/tmp/"
+    cp "${MESA_DEBS_DIR}"/*.deb "${ROOTFS}/tmp/"
     chroot "$ROOTFS" /bin/bash -c "
         export DEBIAN_FRONTEND=noninteractive
         dpkg -i /tmp/*.deb || apt-get install -f -y
@@ -44,47 +96,16 @@ if [ -d "$MESA_DEBS_DIR" ] && ls "$MESA_DEBS_DIR"/*.deb &>/dev/null 2>&1; then
     exit 0
 fi
 
-# ── Build via Docker ──────────────────────────────────────────────────────────
-cyan "No pre-built debs found — building Mesa 25 via Docker..."
-cyan "Source: ${MESA_DOCKER_REPO}"
+# ── No pre-built Mesa found — bail out with clear instructions ────────────────
+error "No Mesa source found. Cannot continue.
 
-command -v docker &>/dev/null || error "Docker not installed. Install Docker or place pre-built Mesa debs at upstream/mesa-debs/"
+Please provide one of the following before building:
 
-# Clone mesa-docker-ps4 if not present
-if [ ! -d "$MESA_BUILD_DIR" ]; then
-    cyan "Cloning mesa-docker-ps4..."
-    git clone --depth=1 "$MESA_DOCKER_REPO" "$MESA_BUILD_DIR"
-else
-    cyan "Updating mesa-docker-ps4..."
-    git -C "$MESA_BUILD_DIR" pull --ff-only 2>/dev/null || true
-fi
+  RECOMMENDED — Mesa 7z overlay (triki1, ps4linux.com forums):
+    Place at: upstream/mesa-ps4-25.3.0-devel-trixie.7z
 
-# Build Docker image
-cyan "Building Docker image (this may take a while first run)..."
-docker build -t "$MESA_DOCKER_IMAGE" "$MESA_BUILD_DIR"
+  ALTERNATIVE — Pre-built Debian .deb files:
+    Place at: upstream/mesa-debs/*.deb
 
-# Run build — outputs .deb files
-mkdir -p "${MESA_BUILD_DIR}/output"
-docker run --rm \
-    -v "${MESA_BUILD_DIR}/output:/output" \
-    "$MESA_DOCKER_IMAGE"
-
-# Check output
-ls "${MESA_BUILD_DIR}/output"/*.deb &>/dev/null || \
-    error "Mesa Docker build produced no .deb files"
-
-# Copy debs into rootfs and install
-cyan "Installing Mesa packages into rootfs..."
-cp "${MESA_BUILD_DIR}/output"/*.deb "${ROOTFS}/tmp/"
-chroot "$ROOTFS" /bin/bash -c "
-    export DEBIAN_FRONTEND=noninteractive
-    dpkg -i /tmp/*.deb || apt-get install -f -y
-    rm -f /tmp/*.deb
-"
-
-# Cache debs for future builds
-mkdir -p "$MESA_DEBS_DIR"
-cp "${MESA_BUILD_DIR}/output"/*.deb "$MESA_DEBS_DIR/"
-cyan "Mesa debs cached at upstream/mesa-debs/ for future builds"
-
-green "Mesa 25 (PS4-patched) installed successfully."
+The Docker build method has been removed (mesa-docker-ps4 has no Dockerfile).
+See upstream/UPSTREAM_SOURCES.md for details."

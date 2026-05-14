@@ -91,12 +91,13 @@ APT_DEPS=(
     xz-utils
     zip
     unzip
+    p7zip-full
 
-    # Build tools (for session switcher C compilation in chroot)
-    # Note: these are host-side only for verification; actual build happens in rootfs chroot
+    # Build tools (for session switcher C compilation on host)
     gcc
     make
     pkg-config
+    libsdl2-dev
 
     # Networking / download
     curl
@@ -259,6 +260,31 @@ fi
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 apt-get autoremove -y
 apt-get clean
+
+# ── Clean up WSL Zone Identifiers ────────────────────────────────────────────
+echo ""
+echo "── Checking for WSL Zone Identifiers ────────────────────────────────"
+ZONE_FILES=()
+while IFS= read -r -d '' f; do
+    ZONE_FILES+=("$f")
+done < <(find "$SCRIPT_ROOT" -name "*:Zone.Identifier" -print0 2>/dev/null)
+
+if [ ${#ZONE_FILES[@]} -eq 0 ]; then
+    ok "No Zone Identifier files found"
+else
+    if [ "$CHECK_ONLY" = true ]; then
+        for f in "${ZONE_FILES[@]}"; do
+            miss "$f"
+        done
+        warn "${#ZONE_FILES[@]} Zone Identifier file(s) found — run without --check to remove"
+    else
+        for f in "${ZONE_FILES[@]}"; do
+            rm -f "$f"
+            ok "Removed: $f"
+        done
+        green "  Cleaned ${#ZONE_FILES[@]} Zone Identifier file(s)"
+    fi
+fi
 
 # ── Make scripts executable + dos2unix ───────────────────────────────────────
 echo ""

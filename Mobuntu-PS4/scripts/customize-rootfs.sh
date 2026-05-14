@@ -26,6 +26,7 @@ done
 
 cyan()  { echo -e "\e[96m    $*\e[0m"; }
 green() { echo -e "\e[92m    $*\e[0m"; }
+warn()  { echo -e "\e[93m    WARNING: $*\e[0m"; }
 error() { echo -e "\e[91mERROR: $*\e[0m" >&2; exit 1; }
 
 [ -d "$ROOTFS" ]   || error "rootfs not found"
@@ -34,7 +35,7 @@ error() { echo -e "\e[91mERROR: $*\e[0m" >&2; exit 1; }
 # ── Resolve UI packages ───────────────────────────────────────────────────────
 case "$UI" in
     gnustep)
-        UI_PACKAGES="gnustep gnustep-devel windowmaker"
+        UI_PACKAGES="gnustep gnustep-devel wmaker"
         UI_SESSION="gnustep"
         ;;
     lxde)
@@ -70,33 +71,48 @@ cat > "${ROOTFS}/etc/hosts" <<EOF
 127.0.1.1   ${HOSTNAME_VAL}
 EOF
 
-# ── Install packages in chroot ────────────────────────────────────────────────
-cyan "Installing UI and system packages (${UI})..."
+# ── Configure apt sources ─────────────────────────────────────────────────────
+cyan "Configuring apt sources (${SUITE})..."
+cat > "${ROOTFS}/etc/apt/sources.list" <<EOF
+deb http://deb.debian.org/debian ${SUITE} main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian ${SUITE}-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security ${SUITE}-security main contrib non-free non-free-firmware
+EOF
 
-# Base session packages — LightDM for standard builds, xinit for Theseus
+# ── Resolve package names for suite ──────────────────────────────────────────
+# libmpv1 was renamed to libmpv2 in trixie; libcurl4 → libcurl4t64 in trixie
+if [ "$SUITE" = "trixie" ] || [ "$SUITE" = "sid" ]; then
+    MPV_PKG="libmpv2"
+    CURL_PKG="libcurl4t64"
+else
+    MPV_PKG="libmpv1"
+    CURL_PKG="libcurl4"
+fi
+
+# ── Session and mode packages ─────────────────────────────────────────────────
 if [ "$ENABLE_THESEUS" = "true" ]; then
     SESSION_PKGS="xinit x11-xserver-utils"
 else
     SESSION_PKGS="lightdm"
 fi
 
-# Desktop fallback packages (only with Theseus)
 DESKTOP_PKGS=""
 if [ "$ENABLE_DESKTOP" = "true" ]; then
     DESKTOP_PKGS="lxde lxde-core"
 fi
 
-# Theseus runtime dependencies (pre-built binary — no build deps needed)
 THESEUS_PKGS=""
 if [ "$ENABLE_THESEUS" = "true" ]; then
-    THESEUS_PKGS="libsdl2-2.0-0 libsdl2-mixer-2.0-0 libmpv1 libcurl4"
+    THESEUS_PKGS="libsdl2-2.0-0 libsdl2-mixer-2.0-0 ${MPV_PKG} ${CURL_PKG}"
 fi
 
+# ── Install packages in chroot ────────────────────────────────────────────────
+cyan "Installing UI and system packages (${UI})..."
 chroot "$ROOTFS" /bin/bash -c "
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
 
-    # Core system
+    # Core system + UI
     apt-get install -y --no-install-recommends \
         ${SESSION_PKGS} \
         xserver-xorg \
@@ -111,7 +127,6 @@ chroot "$ROOTFS" /bin/bash -c "
         git \
         htop \
         nano \
-        steam-installer \
         ${UI_PACKAGES} \
         ${THESEUS_PKGS} \
         ${DESKTOP_PKGS}
@@ -120,13 +135,36 @@ chroot "$ROOTFS" /bin/bash -c "
     rm -rf /var/lib/apt/lists/*
 "
 
+# ── Create required groups ────────────────────────────────────────────────────
+cyan "Creating required groups..."
+chroot "$ROOTFS" /bin/bash -c "
+    for grp in sudo audio video input plugdev netdev bluetooth; do
+        getent group \$grp >/dev/null 2>&1 || groupadd \$grp
+    done
+"
+
+# ── User setup ────────────────────────────────────────────────────────────────
+if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
+    cyan "Creating preseeded user: ${USERNAME}..."
+    chroot "$ROOTFS" /bin/bash -c "
+        useradd -m -s /bin/bash -G sudo,audio,video,input,plugdev,netdev '${USERNAME}'
+        echo '${USERNAME}:${PASSWORD}' | chpasswd
+    "
+else
+    cyan "Creating default user 'mobuntu'..."
+    chroot "$ROOTFS" /bin/bash -c "
+        useradd -m -s /bin/bash -G sudo,audio,video,input,plugdev,netdev mobuntu
+        echo 'mobuntu:mobuntu' | chpasswd
+        passwd -e mobuntu
+    "
+fi
+
 # ── Session setup ─────────────────────────────────────────────────────────────
 if [ "$ENABLE_THESEUS" = "true" ]; then
-    # Doctor Octavius: startx via systemd, no display manager
     cyan "Configuring startx session (Theseus / Doctor Octavius)..."
 
-    # Copy pre-built Theseus binary into rootfs
-    SCRIPT_DIR_REL="$(dirname "$0")"
+    # Copy pre-built Theseus binary
+    SCRIPT_DIR_REL="$(cd "$(dirname "$0")" && pwd)"
     THESEUS_BIN="${SCRIPT_DIR_REL}/../upstream/theseus/theseus"
     if [ -f "$THESEUS_BIN" ]; then
         cyan "Installing pre-built Theseus binary..."
@@ -136,23 +174,35 @@ if [ "$ENABLE_THESEUS" = "true" ]; then
         warn "Theseus binary not found at upstream/theseus/theseus — skipping"
     fi
 
-    # Build session switcher inside chroot (small C file, SDL2 runtime already installed)
+    # Build session switcher on HOST (x86-64 host = x86-64 target, no cross-compile needed)
     SWITCHER_SRC="${OVERLAYS}/theseus/session-switcher"
     if [ -d "$SWITCHER_SRC" ]; then
-        cp -r "$SWITCHER_SRC" "${ROOTFS}/tmp/session-switcher"
-        chroot "$ROOTFS" /bin/bash -c "
-            apt-get install -y --no-install-recommends build-essential pkg-config libsdl2-dev
-            cd /tmp/session-switcher && make
-            cp session-switcher /usr/local/bin/mobuntu-session-switcher
-            chmod +x /usr/local/bin/mobuntu-session-switcher
-            apt-get remove -y --purge build-essential pkg-config libsdl2-dev
-            apt-get autoremove -y
-            apt-get clean
-            rm -rf /tmp/session-switcher
-        " || warn "Session switcher build failed — controller UI will be unavailable"
+        cyan "Building session switcher on host..."
+
+        # Ensure ALL build deps are present on host — gcc alone is not enough
+        NEED_INSTALL=""
+        command -v gcc       &>/dev/null || NEED_INSTALL="$NEED_INSTALL gcc"
+        command -v make      &>/dev/null || NEED_INSTALL="$NEED_INSTALL make"
+        command -v pkg-config &>/dev/null || NEED_INSTALL="$NEED_INSTALL pkg-config"
+        pkg-config --exists sdl2 2>/dev/null || NEED_INSTALL="$NEED_INSTALL libsdl2-dev"
+
+        if [ -n "$NEED_INSTALL" ]; then
+            cyan "Installing host build deps:${NEED_INSTALL}"
+            apt-get install -y --no-install-recommends $NEED_INSTALL
+        fi
+
+        make -C "$SWITCHER_SRC" clean 2>/dev/null || true
+        if make -C "$SWITCHER_SRC"; then
+            cp "${SWITCHER_SRC}/session-switcher" "${ROOTFS}/usr/local/bin/mobuntu-session-switcher"
+            chmod +x "${ROOTFS}/usr/local/bin/mobuntu-session-switcher"
+            make -C "$SWITCHER_SRC" clean
+            cyan "Session switcher installed."
+        else
+            warn "Session switcher build failed — controller UI will be unavailable"
+        fi
     fi
 
-    # Enable mobuntu-session systemd service (starts X on boot)
+    # Enable session service
     chroot "$ROOTFS" /bin/bash -c "
         systemctl enable mobuntu-session NetworkManager bluetooth 2>/dev/null || true
     "
@@ -172,22 +222,6 @@ EOF
 
     chroot "$ROOTFS" /bin/bash -c "
         systemctl enable lightdm NetworkManager bluetooth 2>/dev/null || true
-    "
-fi
-
-# ── User setup ────────────────────────────────────────────────────────────────
-if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
-    cyan "Creating preseeded user: ${USERNAME}..."
-    chroot "$ROOTFS" /bin/bash -c "
-        useradd -m -s /bin/bash -G sudo,audio,video,input,plugdev '${USERNAME}'
-        echo '${USERNAME}:${PASSWORD}' | chpasswd
-    "
-else
-    cyan "No preseed credentials — creating default user 'mobuntu'..."
-    chroot "$ROOTFS" /bin/bash -c "
-        useradd -m -s /bin/bash -G sudo,audio,video,input,plugdev mobuntu
-        echo 'mobuntu:mobuntu' | chpasswd
-        passwd -e mobuntu
     "
 fi
 
