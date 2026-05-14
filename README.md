@@ -12,6 +12,8 @@ If you want to continue or fork this project, start with [`HANDOFF.md`](HANDOFF.
 
 For AI-assisted development, see [`AI_CONTEXT.md`](AI_CONTEXT.md).
 
+This repository has been enabled as a "template repository" so if you wish to continue development, click that button above to get started. 
+
 ---
 
 ## Community
@@ -30,3 +32,5 @@ PastorCatto's current projects are at **https://github.com/PastorCatto**.
 
 This project is GPL-licensed. See [`LICENSE`](LICENSE).  
 See [`Credits.md`](Credits.md) for contributor history — this file must be carried into any fork, with additions only, never removals.
+
+"in case i dont see ya, good afternoon, good evening, and goodnight!" ~Jim Carrey, the Truman Show
